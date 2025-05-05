@@ -1,0 +1,49 @@
+<!-- templates/dms/user_form.html -->
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {% if user_obj %}Edit User{% else %}Create User{% endif %} - E-Parliament DMS
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h2>{% if user_obj %}Edit User: {{ user_obj.username }}{% else %}Create New User{% endif %}</h2>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            {{ form.username|crispy }}
+                            {{ form.first_name|crispy }}
+                            {{ form.last_name|crispy }}
+                            {{ form.email|crispy }}
+                        </div>
+                        <div class="col-md-6">
+                            {{ form.password|crispy }}
+                            {{ form.confirm_password|crispy }}
+                            {{ form.role|crispy }}
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <label class="form-label">Assign Teams</label>
+                        <div class="border p-3 rounded">
+                            {{ form.teams }}
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary">{% if user_obj %}Update{% else %}Create{% endif %} User</button>
+                        <a href="{% url 'dms:user_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

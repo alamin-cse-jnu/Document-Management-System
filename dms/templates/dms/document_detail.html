@@ -1,0 +1,186 @@
+<!-- templates/dms/document_detail.html -->
+{% extends 'base.html' %}
+{% block title %}{{ document.title }} - E-Parliament DMS{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>{{ document.title }}</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'dms:document_download' document.id %}" class="btn btn-primary">Download</a>
+        {% if can_edit %}
+            <a href="{% url 'dms:document_update' document.id %}" class="btn btn-outline-primary">Edit</a>
+        {% endif %}
+        {% if can_share %}
+            <a href="{% url 'dms:document_share' document.id %}" class="btn btn-outline-primary">Share</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                Document Details
+            </div>
+            <div class="card-body">
+                <p><strong>Version:</strong> {{ document.version }}</p>
+                <p><strong>Description:</strong> {{ document.description }}</p>
+                <p><strong>Categories:</strong>
+                    {% for category in document.categories.all %}
+                        <span class="badge bg-secondary">{{ category.name }}</span>
+                    {% endfor %}
+                </p>
+                {% if document.tags %}
+                    <p><strong>Tags:</strong>
+                        {% for tag in document.tags.split ',' %}
+                            <span class="badge bg-info">{{ tag.strip }}</span>
+                        {% endfor %}
+                    </p>
+                {% endif %}
+                <p><strong>Uploaded by:</strong> {{ document.owner.username }} on {{ document.upload_date|date:"F d, Y" }}</p>
+                <p><strong>Visibility:</strong> {{ document.get_visibility_display }}</p>
+                
+                {% if document.file.name|lower|slice:"-4:" == ".pdf" %}
+                    <div class="mt-4">
+                        <h5>Preview:</h5>
+                        <iframe src="{{ document.file.url }}" width="100%" height="500px"></iframe>
+                    </div>
+                {% elif document.file.name|lower|slice:"-4:" == ".jpg" or document.file.name|lower|slice:"-4:" == ".png" or document.file.name|lower|slice:"-5:" == ".jpeg" or document.file.name|lower|slice:"-4:" == ".gif" %}
+                    <div class="mt-4">
+                        <h5>Preview:</h5>
+                        <img src="{{ document.file.url }}" class="img-fluid">
+                    </div>
+                {% else %}
+                    <div class="alert alert-info mt-4">
+                        Preview not available for this file type. Please download the file to view its contents.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Comments Section -->
+        <div class="card">
+            <div class="card-header">
+                Comments
+            </div>
+            <div class="card-body">
+                {% if comments %}
+                    {% for comment in comments %}
+                        <div class="comment mb-3">
+                            <div class="card">
+                                <div class="card-header">
+                                    <strong>{{ comment.user.username }}</strong> - {{ comment.created_at|date:"F d, Y H:i" }}
+                                </div>
+                                <div class="card-body">
+                                    <p>{{ comment.text }}</p>
+                                    
+                                    <!-- Replies -->
+                                    {% for reply in comment.replies.all %}
+                                        <div class="card mt-2 ms-4">
+                                            <div class="card-header">
+                                                <strong>{{ reply.user.username }}</strong> - {{ reply.created_at|date:"F d, Y H:i" }}
+                                            </div>
+                                            <div class="card-body">
+                                                <p>{{ reply.text }}</p>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                    
+                                    <!-- Reply Form -->
+                                    {% if can_comment %}
+                                        <button class="btn btn-sm btn-link reply-toggle" data-comment-id="{{ comment.id }}">Reply</button>
+                                        <form method="post" class="reply-form mt-2 d-none" id="reply-form-{{ comment.id }}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="parent_comment" value="{{ comment.id }}">
+                                            <div class="mb-3">
+                                                <textarea name="text" class="form-control" rows="2" required></textarea>
+                                            </div>
+                                            <button type="submit" class="btn btn-sm btn-primary">Submit Reply</button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p>No comments yet.</p>
+                {% endif %}
+                
+                <!-- Comment Form -->
+                {% if can_comment %}
+                    <hr>
+                    <h5>Add a Comment</h5>
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            {{ comment_form.text.label_tag }}
+                            {{ comment_form.text }}
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit Comment</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                Access Information
+            </div>
+            <div class="card-body">
+                <p><strong>Your access level:</strong> 
+                    {% if permission_level == 'owner' %}
+                        Owner (Full Control)
+                    {% elif permission_level == 'SH' %}
+                        Share
+                    {% elif permission_level == 'WR' %}
+                        Write
+                    {% elif permission_level == 'CM' %}
+                        Comment
+                    {% elif permission_level == 'RD' %}
+                        Read Only
+                    {% else %}
+                        No specific permissions
+                    {% endif %}
+                </p>
+                
+                {% if document.owner == user %}
+                    <h6 class="mt-3">Shared With:</h6>
+                    <ul class="list-group list-group-flush">
+                        {% for perm in document.permissions.all %}
+                            <li class="list-group-item">
+                                {% if perm.user %}
+                                    <strong>User:</strong> {{ perm.user.username }}
+                                {% elif perm.team %}
+                                    <strong>Team:</strong> {{ perm.team.name }}
+                                {% endif %}
+                                <span class="badge bg-info float-end">{{ perm.get_permission_type_display }}</span>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item">Not shared with anyone yet.</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const replyToggles = document.querySelectorAll('.reply-toggle');
+        replyToggles.forEach(toggle => {
+            toggle.addEventListener('click', function() {
+                const commentId = this.getAttribute('data-comment-id');
+                const replyForm = document.getElementById(`reply-form-${commentId}`);
+                replyForm.classList.toggle('d-none');
+            });
+        });
+    });
+</script>
+{% endblock %}

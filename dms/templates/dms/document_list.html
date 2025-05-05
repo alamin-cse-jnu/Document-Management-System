@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block title %}Documents - E-Parliament DMS{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <!-- Sidebar -->
+        <aside class="col-lg-3 mb-4">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-gradient text-white fw-semibold" style="background: linear-gradient(135deg, #007bff, #0056b3);">
+                    Filter by Category
+                </div>
+                <div class="card-body p-2">
+                    <div class="list-group list-group-flush">
+                        <a href="{% url 'dms:document_list' %}" class="list-group-item list-group-item-action {% if not request.GET.category %}active bg-primary text-white{% endif %}">
+                            All Categories
+                        </a>
+                        {% for category in categories %}
+                            <a href="?category={{ category.id }}" class="list-group-item list-group-item-action {% if request.GET.category|default:'' == category.id|stringformat:'s' %}active bg-primary text-white{% endif %}">
+                                {{ category.name }}
+                            </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-gradient text-white fw-semibold" style="background: linear-gradient(135deg, #17a2b8, #117a8b);">
+                    Search
+                </div>
+                <div class="card-body">
+                    <form method="get" class="d-grid gap-2">
+                        <input type="text" name="q" class="form-control rounded-pill" placeholder="🔍 Search documents..." value="{{ request.GET.q }}">
+                        <button type="submit" class="btn btn-outline-info rounded-pill">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Document List -->
+        <section class="col-lg-9">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="fw-bold text-dark">📄 Documents</h3>
+                <a href="{% url 'dms:document_create' %}" class="btn btn-success rounded-pill">
+                    <i class="bi bi-cloud-arrow-up"></i> Upload
+                </a>
+            </div>
+
+            {% if page_obj %}
+                <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
+                    {% for document in page_obj %}
+                        <div class="col">
+                            <div class="card border-0 shadow-sm h-100 transition-all" style="transition: all 0.3s ease-in-out;">
+                                <div class="card-body">
+                                    <h5 class="card-title text-primary fw-semibold">{{ document.title }}</h5>
+                                    <p class="text-muted mb-1">Version: v{{ document.version }}</p>
+                                    <p class="card-text small">{{ document.description|truncatechars:100 }}</p>
+                                    <div class="mb-2">
+                                        {% for category in document.categories.all %}
+                                            <span class="badge bg-light text-dark border">{{ category.name }}</span>
+                                        {% endfor %}
+                                    </div>
+                                    <p class="text-muted small mt-3">
+                                        <i class="bi bi-person-fill"></i> {{ document.owner.username }}<br>
+                                        <i class="bi bi-calendar-check"></i> {{ document.upload_date|date:"M d, Y" }}
+                                    </p>
+                                </div>
+                                <div class="card-footer bg-transparent border-0 d-flex justify-content-between">
+                                    <a href="{% url 'dms:document_detail' document.id %}" class="btn btn-sm btn-outline-primary rounded-pill">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                    <a href="{% url 'dms:document_download' document.id %}" class="btn btn-sm btn-primary rounded-pill">
+                                        <i class="bi bi-download"></i> Download
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Pagination -->
+                {% if page_obj.has_other_pages %}
+                    <nav class="mt-4">
+                        <ul class="pagination justify-content-center">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">Previous</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">Previous</span></li>
+                            {% endif %}
+
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if page_obj.number == num %}
+                                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <li class="page-item"><a class="page-link" href="?page={{ num }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">{{ num }}</a></li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">Next</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">Next</span></li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                {% endif %}
+            {% else %}
+                <div class="alert alert-info">No documents found.</div>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}
