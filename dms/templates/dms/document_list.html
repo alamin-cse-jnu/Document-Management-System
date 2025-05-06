@@ -1,119 +1,422 @@
 {% extends 'base.html' %}
 {% block title %}Documents - E-Parliament DMS{% endblock %}
 
+{% block extra_css %}
+<style>
+    .document-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        height: 100%;
+    }
+    .document-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .category-pill {
+        transition: all 0.2s;
+    }
+    .category-pill:hover, .category-pill.active {
+        background-color: var(--bs-primary);
+        color: white;
+    }
+    .search-input {
+        border-radius: 30px;
+        padding-left: 40px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236c757d' class='bi bi-search' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: 15px center;
+    }
+    .filter-sidebar {
+        position: sticky;
+        top: 20px;
+    }
+    .doc-list-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 10px;
+        padding: 15px 20px;
+        margin-bottom: 20px;
+    }
+    .doc-list-stats {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    .document-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+    }
+    .category-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    .doc-icon {
+        font-size: 2rem;
+        opacity: 0.7;
+    }
+    .tag-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 15px;
+    }
+    .view-switcher {
+        display: inline-flex;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 4px;
+    }
+    .view-switcher button {
+        border: none;
+        background: transparent;
+        border-radius: 4px;
+        padding: 5px 10px;
+    }
+    .view-switcher button.active {
+        background-color: white;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .table-view {
+        display: none;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 60px 0;
+    }
+    .empty-state-icon {
+        font-size: 4rem;
+        color: #dee2e6;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid py-4">
     <div class="row">
-        <!-- Sidebar -->
-        <aside class="col-lg-3 mb-4">
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-gradient text-white fw-semibold" style="background: linear-gradient(135deg, #007bff, #0056b3);">
-                    Filter by Category
+        <!-- Left Sidebar - Filters -->
+        <div class="col-lg-3 mb-4">
+            <div class="filter-sidebar">
+                <!-- Search Box -->
+                <div class="card shadow-sm mb-4 border-0">
+                    <div class="card-body">
+                        <form method="get" class="mb-0">
+                            <div class="input-group">
+                                <input type="text" name="q" class="form-control search-input" 
+                                       placeholder="Search documents..." value="{{ request.GET.q }}">
+                                <button type="submit" class="btn btn-primary rounded-end">
+                                    Search
+                                </button>
+                            </div>
+                            <!-- Reset filters link -->
+                            {% if request.GET.q or request.GET.category or request.GET.tag %}
+                            <div class="text-end mt-2">
+                                <a href="{% url 'dms:document_list' %}" class="text-secondary small">
+                                    <i class="bi bi-x-circle"></i> Clear filters
+                                </a>
+                            </div>
+                            {% endif %}
+                        </form>
+                    </div>
                 </div>
-                <div class="card-body p-2">
-                    <div class="list-group list-group-flush">
-                        <a href="{% url 'dms:document_list' %}" class="list-group-item list-group-item-action {% if not request.GET.category %}active bg-primary text-white{% endif %}">
-                            All Categories
-                        </a>
-                        {% for category in categories %}
-                            <a href="?category={{ category.id }}" class="list-group-item list-group-item-action {% if request.GET.category|default:'' == category.id|stringformat:'s' %}active bg-primary text-white{% endif %}">
-                                {{ category.name }}
+
+                <!-- Categories Filter -->
+                <div class="card shadow-sm mb-4 border-0">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0">
+                            <i class="bi bi-folder2"></i> Categories
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex flex-column gap-2">
+                            <a href="{% url 'dms:document_list' %}" class="category-pill btn btn-sm btn-light text-start {% if not request.GET.category %}active{% endif %}">
+                                <i class="bi bi-folder2"></i> All Categories
+                                <span class="badge bg-secondary float-end">{{ page_obj.paginator.count }}</span>
                             </a>
-                        {% endfor %}
+                            
+                            {% for category in categories %}
+                            <a href="?category={{ category.id }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" 
+                               class="category-pill btn btn-sm btn-light text-start {% if request.GET.category|default:'' == category.id|stringformat:'s' %}active{% endif %}">
+                                <i class="bi bi-folder2"></i> {{ category.name }}
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Popular Tags -->
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0">
+                            <i class="bi bi-tags"></i> Common Tags
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="tag-cloud">
+                            <!-- This would ideally be populated from the backend with common tags -->
+                            <a href="?tag=report" class="badge bg-light text-dark border">report</a>
+                            <a href="?tag=meeting" class="badge bg-light text-dark border">meeting</a>
+                            <a href="?tag=draft" class="badge bg-light text-dark border">draft</a>
+                            <a href="?tag=final" class="badge bg-light text-dark border">final</a>
+                            <a href="?tag=committee" class="badge bg-light text-dark border">committee</a>
+                            <a href="?tag=important" class="badge bg-light text-dark border">important</a>
+                            <a href="?tag=budget" class="badge bg-light text-dark border">budget</a>
+                        </div>
                     </div>
                 </div>
             </div>
-
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-gradient text-white fw-semibold" style="background: linear-gradient(135deg, #17a2b8, #117a8b);">
-                    Search
+        </div>
+        
+        <!-- Main Content - Document Listing -->
+        <div class="col-lg-9">
+            <!-- Header with actions -->
+            <div class="doc-list-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-1">Documents Library</h4>
+                    <div class="doc-list-stats">
+                        {% if page_obj %}
+                            Showing {{ page_obj.start_index }} - {{ page_obj.end_index }} of {{ page_obj.paginator.count }} documents
+                            {% if request.GET.q %} matching "{{ request.GET.q }}"{% endif %}
+                            {% if request.GET.category %} in selected category{% endif %}
+                            {% if request.GET.tag %} with tag "{{ request.GET.tag }}"{% endif %}
+                        {% endif %}
+                    </div>
                 </div>
-                <div class="card-body">
-                    <form method="get" class="d-grid gap-2">
-                        <input type="text" name="q" class="form-control rounded-pill" placeholder="🔍 Search documents..." value="{{ request.GET.q }}">
-                        <button type="submit" class="btn btn-outline-info rounded-pill">
-                            <i class="bi bi-search"></i> Search
+                <div class="d-flex gap-2">
+                    <!-- View switcher -->
+                    <div class="view-switcher me-2">
+                        <button id="grid-view-btn" class="active" title="Grid view">
+                            <i class="bi bi-grid-3x3-gap"></i>
                         </button>
-                    </form>
+                        <button id="table-view-btn" title="Table view">
+                            <i class="bi bi-list-ul"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Upload button -->
+                    <a href="{% url 'dms:document_create' %}" class="btn btn-primary">
+                        <i class="bi bi-upload me-1"></i> Upload Document
+                    </a>
                 </div>
             </div>
-        </aside>
-
-        <!-- Document List -->
-        <section class="col-lg-9">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h3 class="fw-bold text-dark">📄 Documents</h3>
-                <a href="{% url 'dms:document_create' %}" class="btn btn-success rounded-pill">
-                    <i class="bi bi-cloud-arrow-up"></i> Upload
-                </a>
-            </div>
-
+            
             {% if page_obj %}
-                <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
+                <!-- Grid View (default) -->
+                <div id="grid-view" class="document-grid">
                     {% for document in page_obj %}
-                        <div class="col">
-                            <div class="card border-0 shadow-sm h-100 transition-all" style="transition: all 0.3s ease-in-out;">
-                                <div class="card-body">
-                                    <h5 class="card-title text-primary fw-semibold">{{ document.title }}</h5>
-                                    <p class="text-muted mb-1">Version: v{{ document.version }}</p>
-                                    <p class="card-text small">{{ document.description|truncatechars:100 }}</p>
-                                    <div class="mb-2">
-                                        {% for category in document.categories.all %}
-                                            <span class="badge bg-light text-dark border">{{ category.name }}</span>
-                                        {% endfor %}
-                                    </div>
-                                    <p class="text-muted small mt-3">
-                                        <i class="bi bi-person-fill"></i> {{ document.owner.username }}<br>
-                                        <i class="bi bi-calendar-check"></i> {{ document.upload_date|date:"M d, Y" }}
-                                    </p>
+                        <div class="document-card card shadow-sm border-0">
+                            <div class="card-body d-flex flex-column">
+                                <!-- Document icon based on file type -->
+                                <div class="text-center mb-3">
+                                    {% if document.file.name|lower|slice:"-4:" == ".pdf" %}
+                                        <i class="bi bi-file-earmark-pdf doc-icon text-danger"></i>
+                                    {% elif document.file.name|lower|slice:"-4:" == ".doc" or document.file.name|lower|slice:"-5:" == ".docx" %}
+                                        <i class="bi bi-file-earmark-word doc-icon text-primary"></i>
+                                    {% elif document.file.name|lower|slice:"-4:" == ".xls" or document.file.name|lower|slice:"-5:" == ".xlsx" %}
+                                        <i class="bi bi-file-earmark-excel doc-icon text-success"></i>
+                                    {% elif document.file.name|lower|slice:"-4:" == ".ppt" or document.file.name|lower|slice:"-5:" == ".pptx" %}
+                                        <i class="bi bi-file-earmark-ppt doc-icon text-warning"></i>
+                                    {% elif document.file.name|lower|slice:"-4:" == ".jpg" or document.file.name|lower|slice:"-4:" == ".png" or document.file.name|lower|slice:"-5:" == ".jpeg" %}
+                                        <i class="bi bi-file-earmark-image doc-icon text-info"></i>
+                                    {% else %}
+                                        <i class="bi bi-file-earmark doc-icon"></i>
+                                    {% endif %}
                                 </div>
-                                <div class="card-footer bg-transparent border-0 d-flex justify-content-between">
-                                    <a href="{% url 'dms:document_detail' document.id %}" class="btn btn-sm btn-outline-primary rounded-pill">
-                                        <i class="bi bi-eye"></i> View
+                                
+                                <h5 class="card-title text-truncate">{{ document.title }}</h5>
+                                
+                                <div class="mb-2 small text-secondary">
+                                    <span title="Version"><i class="bi bi-layers me-1"></i>v{{ document.version }}</span>
+                                    <span class="ms-2" title="Upload date"><i class="bi bi-calendar-date me-1"></i>{{ document.upload_date|date:"M d, Y" }}</span>
+                                </div>
+                                
+                                {% if document.description %}
+                                <p class="card-text text-muted small mb-3">{{ document.description|truncatechars:80 }}</p>
+                                {% endif %}
+                                
+                                <!-- Categories -->
+                                <div class="category-tags mt-auto mb-2">
+                                    {% for category in document.categories.all %}
+                                        <span class="badge bg-light text-dark border">{{ category.name|truncatechars:15 }}</span>
+                                    {% endfor %}
+                                </div>
+                                
+                                <!-- Owner -->
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="bg-light rounded-circle p-1 me-2">
+                                        <i class="bi bi-person"></i>
+                                    </div>
+                                    <small class="text-muted">{{ document.owner.username }}</small>
+                                </div>
+                                
+                                <!-- Actions -->
+                                <div class="d-flex justify-content-between mt-auto">
+                                    <a href="{% url 'dms:document_detail' document.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye me-1"></i> View
                                     </a>
-                                    <a href="{% url 'dms:document_download' document.id %}" class="btn btn-sm btn-primary rounded-pill">
-                                        <i class="bi bi-download"></i> Download
+                                    <a href="{% url 'dms:document_download' document.id %}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-download me-1"></i> Download
                                     </a>
                                 </div>
                             </div>
                         </div>
                     {% endfor %}
                 </div>
-
+                
+                <!-- Table View (hidden by default) -->
+                <div id="table-view" class="table-view">
+                    <div class="card shadow-sm border-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Document</th>
+                                        <th>Categories</th>
+                                        <th>Owner</th>
+                                        <th>Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for document in page_obj %}
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <!-- Document type icon -->
+                                                {% if document.file.name|lower|slice:"-4:" == ".pdf" %}
+                                                    <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
+                                                {% elif document.file.name|lower|slice:"-4:" == ".doc" or document.file.name|lower|slice:"-5:" == ".docx" %}
+                                                    <i class="bi bi-file-earmark-word text-primary me-2"></i>
+                                                {% else %}
+                                                    <i class="bi bi-file-earmark me-2"></i>
+                                                {% endif %}
+                                                <div>
+                                                    <div class="fw-semibold">{{ document.title }}</div>
+                                                    <div class="small text-muted">v{{ document.version }}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {% for category in document.categories.all %}
+                                                <span class="badge bg-light text-dark border">{{ category.name|truncatechars:15 }}</span>
+                                            {% endfor %}
+                                        </td>
+                                        <td>{{ document.owner.username }}</td>
+                                        <td>{{ document.upload_date|date:"M d, Y" }}</td>
+                                        <td>
+                                            <div class="d-flex gap-1">
+                                                <a href="{% url 'dms:document_detail' document.id %}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                                <a href="{% url 'dms:document_download' document.id %}" class="btn btn-sm btn-primary">
+                                                    <i class="bi bi-download"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Pagination -->
                 {% if page_obj.has_other_pages %}
-                    <nav class="mt-4">
-                        <ul class="pagination justify-content-center">
-                            {% if page_obj.has_previous %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">Previous</a>
-                                </li>
-                            {% else %}
-                                <li class="page-item disabled"><span class="page-link">Previous</span></li>
-                            {% endif %}
+                <nav class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.tag %}&tag={{ request.GET.tag }}{% endif %}">
+                                    <i class="bi bi-chevron-left"></i> Previous
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link"><i class="bi bi-chevron-left"></i> Previous</span>
+                            </li>
+                        {% endif %}
 
-                            {% for num in page_obj.paginator.page_range %}
-                                {% if page_obj.number == num %}
-                                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                                    <li class="page-item"><a class="page-link" href="?page={{ num }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">{{ num }}</a></li>
-                                {% endif %}
-                            {% endfor %}
-
-                            {% if page_obj.has_next %}
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}">Next</a>
+                                    <a class="page-link" href="?page={{ num }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.tag %}&tag={{ request.GET.tag }}{% endif %}">{{ num }}</a>
                                 </li>
-                            {% else %}
-                                <li class="page-item disabled"><span class="page-link">Next</span></li>
                             {% endif %}
-                        </ul>
-                    </nav>
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}{% if request.GET.tag %}&tag={{ request.GET.tag }}{% endif %}">
+                                    Next <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Next <i class="bi bi-chevron-right"></i></span>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
                 {% endif %}
+                
             {% else %}
-                <div class="alert alert-info">No documents found.</div>
+                <!-- Empty state -->
+                <div class="empty-state">
+                    <div class="empty-state-icon">
+                        <i class="bi bi-folder2-open"></i>
+                    </div>
+                    <h4>No documents found</h4>
+                    <p class="text-muted">
+                        {% if request.GET.q or request.GET.category or request.GET.tag %}
+                            No documents match your current filters.
+                            <a href="{% url 'dms:document_list' %}">Clear filters</a>
+                        {% else %}
+                            There are no documents in the system yet.
+                        {% endif %}
+                    </p>
+                    <a href="{% url 'dms:document_create' %}" class="btn btn-primary mt-3">
+                        <i class="bi bi-upload me-1"></i> Upload Your First Document
+                    </a>
+                </div>
             {% endif %}
-        </section>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const gridViewBtn = document.getElementById('grid-view-btn');
+        const tableViewBtn = document.getElementById('table-view-btn');
+        const gridView = document.getElementById('grid-view');
+        const tableView = document.getElementById('table-view');
+        
+        // Switch to grid view
+        gridViewBtn.addEventListener('click', function() {
+            gridView.style.display = 'grid';
+            tableView.style.display = 'none';
+            gridViewBtn.classList.add('active');
+            tableViewBtn.classList.remove('active');
+            localStorage.setItem('documentViewPreference', 'grid');
+        });
+        
+        // Switch to table view
+        tableViewBtn.addEventListener('click', function() {
+            gridView.style.display = 'none';
+            tableView.style.display = 'block';
+            tableViewBtn.classList.add('active');
+            gridViewBtn.classList.remove('active');
+            localStorage.setItem('documentViewPreference', 'table');
+        });
+        
+        // Check for user's saved preference
+        const savedView = localStorage.getItem('documentViewPreference');
+        if (savedView === 'table') {
+            tableViewBtn.click();
+        }
+    });
+</script>
 {% endblock %}

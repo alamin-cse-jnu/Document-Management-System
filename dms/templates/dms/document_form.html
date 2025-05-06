@@ -1,39 +1,1022 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
+{% load dms_extras %}
 
 {% block title %}
     {% if document %}Edit Document{% else %}Upload Document{% endif %} - E-Parliament DMS
 {% endblock %}
 
-{% block content %}
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-8 col-md-10">
-            <div class="card shadow-lg border-0 rounded-4">
-                <div class="card-header bg-primary text-white rounded-top-4">
-                    <h4 class="mb-0">
-                        {% if document %}<i class="bi bi-pencil-square"></i> Edit Document
-                        {% else %}<i class="bi bi-upload"></i> Upload Document
-                        {% endif %}
-                    </h4>
-                </div>
-                <div class="card-body p-4">
-                    <form method="post" enctype="multipart/form-data" novalidate>
-                        {% csrf_token %}
-                        {{ form|crispy }}
+{% block extra_css %}
+<style>
+    .upload-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    .form-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+    }
+    .form-card .card-header {
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+        border-bottom: none;
+    }
+    .category-section {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    .form-switch .form-check-input {
+        width: 3em;
+    }
+    .upload-area {
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        padding: 30px;
+        text-align: center;
+        background-color: #f8f9fa;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+    .upload-area:hover, .upload-area.dragover {
+        border-color: #6c757d;
+        background-color: #e9ecef;
+    }
+    .upload-icon {
+        font-size: 3rem;
+        color: #6c757d;
+        margin-bottom: 15px;
+    }
+    .file-preview {
+        display: none;
+        border-radius: 8px;
+        padding: 15px;
+        background-color: #fff;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .preview-icon {
+        font-size: 2rem;
+    }
+    .form-progress {
+        display: flex;
+        margin-bottom: 30px;
+        position: relative;
+    }
+    .form-progress:before {
+        content: '';
+        position: absolute;
+        top: 14px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background-color: #dee2e6;
+        z-index: 0;
+    }
+    .progress-step {
+        flex: 1;
+        position: relative;
+        text-align: center;
+        z-index: 1;
+    }
+    .step-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background-color: #dee2e6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 10px;
+        color: #fff;
+        font-weight: bold;
+        transition: all 0.3s;
+    }
+    .step-icon.active {
+        background-color: #007bff;
+    }
+    .step-icon.completed {
+        background-color: #28a745;
+    }
+    .step-text {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+    .step-text.active {
+        color: #007bff;
+        font-weight: bold;
+    }
+    .step-content {
+        display: none;
+    }
+    .step-content.active {
+        display: block;
+    }
+    .btn-nav {
+        min-width: 120px;
+    }
+    .tag-input-container {
+        position: relative;
+    }
+    .tag-suggestions {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ced4da;
+        border-radius: 0 0 4px 4px;
+        max-height: 150px;
+        overflow-y: auto;
+        z-index: 5;
+        display: none;
+    }
+    .tag-suggestion-item {
+        padding: 5px 10px;
+        cursor: pointer;
+    }
+    .tag-suggestion-item:hover {
+        background-color: #f8f9fa;
+    }
+    .tag-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 10px;
+    }
+    .tag-pill {
+        background-color: #e9ecef;
+        border-radius: 20px;
+        padding: 2px 10px;
+        display: inline-flex;
+        align-items: center;
+        font-size: 0.8rem;
+    }
+    .remove-tag {
+        margin-left: 5px;
+        cursor: pointer;
+    }
+    .visibility-option {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .visibility-option:hover {
+        border-color: #007bff;
+        background-color: #f8f9fa;
+    }
+    .visibility-option.selected {
+        border-color: #007bff;
+        background-color: rgba(0, 123, 255, 0.1);
+    }
+    .visibility-icon {
+        font-size: 1.5rem;
+        margin-right: 10px;
+    }
+    #form-summary {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+    }
+    .summary-item {
+        margin-bottom: 10px;
+    }
+    .summary-label {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .category-selector {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 10px;
+    }
+    .category-item {
+        display: block;
+        padding: 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .category-item:hover {
+        border-color: #007bff;
+        background-color: #f8f9fa;
+    }
+    .category-item.selected {
+        border-color: #007bff;
+        background-color: rgba(0, 123, 255, 0.1);
+    }
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(255, 255, 255, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        display: none;
+    }
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(0, 123, 255, 0.1);
+        border-radius: 50%;
+        border-left-color: #007bff;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
 
-                        <div class="d-flex justify-content-end mt-4">
-                            <button type="submit" class="btn btn-success me-2">
-                                <i class="bi bi-save"></i> Save
-                            </button>
-                            <a href="{% if document %}{% url 'dms:document_detail' document.id %}{% else %}{% url 'dms:document_list' %}{% endif %}" class="btn btn-outline-secondary">
-                                Cancel
-                            </a>
-                        </div>
-                    </form>
+{% block content %}
+<div class="loading-overlay" id="loading-overlay">
+    <div class="spinner"></div>
+</div>
+
+<div class="container py-4 upload-container">
+    <div class="card form-card">
+        <div class="card-header bg-primary text-white py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">
+                    {% if document %}
+                        <i class="bi bi-pencil-square me-2"></i> Edit Document
+                    {% else %}
+                        <i class="bi bi-cloud-upload me-2"></i> Upload New Document
+                    {% endif %}
+                </h4>
+                <span>
+                    {% if document %}Version: {{ document.version }}{% endif %}
+                </span>
+            </div>
+        </div>
+        
+        <div class="card-body p-4">
+            <!-- Progress Steps -->
+            <div class="form-progress mb-4">
+                <div class="progress-step">
+                    <div class="step-icon active" id="step1-icon">1</div>
+                    <div class="step-text active" id="step1-text">Document Info</div>
+                </div>
+                <div class="progress-step">
+                    <div class="step-icon" id="step2-icon">2</div>
+                    <div class="step-text" id="step2-text">Categories & Tags</div>
+                </div>
+                <div class="progress-step">
+                    <div class="step-icon" id="step3-icon">3</div>
+                    <div class="step-text" id="step3-text">Visibility Settings</div>
+                </div>
+                <div class="progress-step">
+                    <div class="step-icon" id="step4-icon">4</div>
+                    <div class="step-text" id="step4-text">Review & Submit</div>
                 </div>
             </div>
+            
+            <form method="post" enctype="multipart/form-data" id="document-form" novalidate>
+                {% csrf_token %}
+                
+                <!-- Step 1: Basic Document Info -->
+                <div class="step-content active" id="step1">
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="mb-3">
+                                <label for="id_title" class="form-label">Document Title <span class="text-danger">*</span></label>
+                                <input type="text" name="title" id="id_title" class="form-control form-control-lg" value="{% if document %}{{ document.title }}{% endif %}" required>
+                                <div class="form-text">Enter a descriptive title for your document.</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="id_description" class="form-label">Description</label>
+                                <textarea name="description" id="id_description" rows="3" class="form-control">{% if document %}{{ document.description }}{% endif %}</textarea>
+                                <div class="form-text">A brief description of this document's content or purpose.</div>
+                            </div>
+                            
+                            {% if not document %}
+                            <div class="mb-3">
+                                <label class="form-label">File <span class="text-danger">*</span></label>
+                                <div class="upload-area" id="drop-area">
+                                    <i class="bi bi-cloud-arrow-up upload-icon"></i>
+                                    <h5>Drag and drop your file here</h5>
+                                    <p class="text-muted">or</p>
+                                    <button type="button" class="btn btn-outline-primary" id="browse-files">Browse Files</button>
+                                    <input type="file" name="file" id="id_file" class="d-none" required>
+                                    <p class="form-text mt-3">Supported formats: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, PNG, etc.</p>
+                                    <p class="form-text">Maximum file size: 500MB</p>
+                                </div>
+                                
+                                <div class="file-preview mt-3" id="file-preview">
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-3">
+                                            <i class="bi bi-file-earmark preview-icon" id="preview-icon"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1" id="file-name">filename.pdf</h6>
+                                            <p class="text-muted mb-0" id="file-size">Size: 2.3 MB</p>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" id="remove-file">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="mb-3">
+                                <label class="form-label">Current File</label>
+                                <div class="d-flex align-items-center p-3 border rounded">
+                                    <div class="me-3">
+                                        {% if document.file.name|lower|slice:"-4:" == ".pdf" %}
+                                            <i class="bi bi-file-earmark-pdf text-danger preview-icon"></i>
+                                        {% elif document.file.name|lower|slice:"-4:" == ".doc" or document.file.name|lower|slice:"-5:" == ".docx" %}
+                                            <i class="bi bi-file-earmark-word text-primary preview-icon"></i>
+                                        {% elif document.file.name|lower|slice:"-4:" == ".xls" or document.file.name|lower|slice:"-5:" == ".xlsx" %}
+                                            <i class="bi bi-file-earmark-excel text-success preview-icon"></i>
+                                        {% elif document.file.name|lower|slice:"-4:" == ".ppt" or document.file.name|lower|slice:"-5:" == ".pptx" %}
+                                            <i class="bi bi-file-earmark-ppt text-warning preview-icon"></i>
+                                        {% elif document.file.name|lower|slice:"-4:" == ".jpg" or document.file.name|lower|slice:"-4:" == ".png" or document.file.name|lower|slice:"-5:" == ".jpeg" %}
+                                            <i class="bi bi-file-earmark-image text-info preview-icon"></i>
+                                        {% else %}
+                                            <i class="bi bi-file-earmark preview-icon"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">{{ document.file.name|filename }}</h6>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="replace-file-toggle">
+                                            <label class="form-check-label text-muted" for="replace-file-toggle">Replace with a new file</label>
+                                        </div>
+                                    </div>
+                                    <a href="{% url 'dms:document_download' document.id %}" class="btn btn-outline-primary btn-sm" target="_blank">
+                                        <i class="bi bi-download me-1"></i> Download
+                                    </a>
+                                </div>
+                                
+                                <div class="mt-3 d-none" id="replacement-file-container">
+                                    <div class="upload-area" id="drop-area">
+                                        <i class="bi bi-cloud-arrow-up upload-icon"></i>
+                                        <h5>Drag and drop your file here</h5>
+                                        <p class="text-muted">or</p>
+                                        <button type="button" class="btn btn-outline-primary" id="browse-files">Browse Files</button>
+                                        <input type="file" name="file" id="id_file" class="d-none">
+                                    </div>
+                                    
+                                    <div class="file-preview mt-3" id="file-preview">
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-3">
+                                                <i class="bi bi-file-earmark preview-icon" id="preview-icon"></i>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-1" id="file-name">filename.pdf</h6>
+                                                <p class="text-muted mb-0" id="file-size">Size: 2.3 MB</p>
+                                            </div>
+                                            <button type="button" class="btn btn-outline-danger btn-sm" id="remove-file">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="alert alert-info mt-3">
+                                        <i class="bi bi-info-circle me-2"></i> Uploading a new file will create a new version of this document.
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="button" class="btn btn-outline-secondary btn-nav" onclick="location.href='{% if document %}{% url 'dms:document_detail' document.id %}{% else %}{% url 'dms:document_list' %}{% endif %}'">
+                            <i class="bi bi-x-lg me-1"></i> Cancel
+                        </button>
+                        <button type="button" class="btn btn-primary btn-nav" id="to-step2-btn">
+                            Next <i class="bi bi-arrow-right ms-1"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 2: Categories & Tags -->
+                <div class="step-content" id="step2">
+                    <div class="category-section mb-4">
+                        <h5 class="mb-3"><i class="bi bi-folder2 me-2"></i> Categories <span class="text-danger">*</span></h5>
+                        <p class="text-muted mb-3">Select at least one category for your document.</p>
+                        
+                        <div class="category-selector">
+                            {% for category in form.categories.field.queryset %}
+                                <div class="category-item {% if document and category in document.categories.all %}selected{% endif %}" data-category-id="{{ category.id }}">
+                                    <div class="d-flex align-items-center">
+                                        <input type="checkbox" name="categories" value="{{ category.id }}" id="category_{{ category.id }}" class="form-check-input me-2 category-checkbox" {% if document and category in document.categories.all %}checked{% endif %}>
+                                        <label for="category_{{ category.id }}" class="form-check-label mb-0">{{ category.name }}</label>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <div id="categories-error" class="text-danger mt-2 d-none">Please select at least one category.</div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5 class="mb-3"><i class="bi bi-tags me-2"></i> Tags</h5>
+                        <p class="text-muted mb-3">Add tags to make your document easier to find. Separate tags with commas.</p>
+                        
+                        <div class="tag-input-container">
+                            <input type="text" class="form-control" id="tag-input" placeholder="Add tags like: report, meeting, draft...">
+                            <input type="hidden" name="tags" id="tags-hidden" value="{% if document %}{{ document.tags }}{% endif %}">
+                            
+                            <div class="tag-suggestions" id="tag-suggestions">
+                                <div class="tag-suggestion-item">budget</div>
+                                <div class="tag-suggestion-item">report</div>
+                                <div class="tag-suggestion-item">meeting</div>
+                                <div class="tag-suggestion-item">important</div>
+                                <div class="tag-suggestion-item">draft</div>
+                                <div class="tag-suggestion-item">final</div>
+                            </div>
+                        </div>
+                        
+                        <div class="tag-pills" id="tag-pills">
+                            {% if document and document.tags %}
+                                <!-- We'll load these tags with JavaScript instead -->
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="button" class="btn btn-outline-secondary btn-nav" id="back-to-step1-btn">
+                            <i class="bi bi-arrow-left me-1"></i> Back
+                        </button>
+                        <button type="button" class="btn btn-primary btn-nav" id="to-step3-btn">
+                            Next <i class="bi bi-arrow-right ms-1"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 3: Visibility Settings -->
+                <div class="step-content" id="step3">
+                    <h5 class="mb-3"><i class="bi bi-eye me-2"></i> Document Visibility</h5>
+                    <p class="text-muted mb-3">Choose who can see this document.</p>
+                    
+                    <div class="visibility-option {% if not document or document.visibility == 'PR' %}selected{% endif %}" data-visibility="PR">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="bi bi-lock-fill visibility-icon"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Private</h6>
+                                <p class="text-muted mb-0">Only you and users you explicitly share with can access this document.</p>
+                            </div>
+                            <div class="ms-auto">
+                                <input type="radio" name="visibility" value="PR" class="form-check-input" {% if not document or document.visibility == 'PR' %}checked{% endif %}>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="visibility-option {% if document and document.visibility == 'TM' %}selected{% endif %}" data-visibility="TM">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="bi bi-people-fill visibility-icon"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Team Only</h6>
+                                <p class="text-muted mb-0">All members of your teams can access this document.</p>
+                            </div>
+                            <div class="ms-auto">
+                                <input type="radio" name="visibility" value="TM" class="form-check-input" {% if document and document.visibility == 'TM' %}checked{% endif %}>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="visibility-option {% if document and document.visibility == 'PB' %}selected{% endif %}" data-visibility="PB">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="bi bi-globe visibility-icon"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">Public</h6>
+                                <p class="text-muted mb-0">All users in the system can access this document.</p>
+                            </div>
+                            <div class="ms-auto">
+                                <input type="radio" name="visibility" value="PB" class="form-check-input" {% if document and document.visibility == 'PB' %}checked{% endif %}>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mt-4">
+                        <i class="bi bi-info-circle me-2"></i> You can still share this document with specific teams or users after uploading, regardless of visibility setting.
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="button" class="btn btn-outline-secondary btn-nav" id="back-to-step2-btn">
+                            <i class="bi bi-arrow-left me-1"></i> Back
+                        </button>
+                        <button type="button" class="btn btn-primary btn-nav" id="to-step4-btn">
+                            Next <i class="bi bi-arrow-right ms-1"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 4: Review & Submit -->
+                <div class="step-content" id="step4">
+                    <h5 class="mb-3"><i class="bi bi-check-circle me-2"></i> Review Your Document</h5>
+                    <p class="text-muted mb-3">Please review the information below before submitting.</p>
+                    
+                    <div id="form-summary">
+                        <div class="summary-item">
+                            <div class="summary-label">Title:</div>
+                            <div id="summary-title"></div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <div class="summary-label">File:</div>
+                            <div id="summary-file"></div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <div class="summary-label">Description:</div>
+                            <div id="summary-description"></div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <div class="summary-label">Categories:</div>
+                            <div id="summary-categories"></div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <div class="summary-label">Tags:</div>
+                            <div id="summary-tags"></div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <div class="summary-label">Visibility:</div>
+                            <div id="summary-visibility"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning mt-4">
+                        <i class="bi bi-exclamation-triangle me-2"></i> By submitting, you confirm that you have the rights to share this document within the system.
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="button" class="btn btn-outline-secondary btn-nav" id="back-to-step3-btn">
+                            <i class="bi bi-arrow-left me-1"></i> Back
+                        </button>
+                        <button type="submit" class="btn btn-success btn-nav" id="submit-form-btn">
+                            <i class="bi bi-check-lg me-1"></i> {% if document %}Save Changes{% else %}Upload Document{% endif %}
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // If document exists and has tags, initialize the tag pills
+        {% if document and document.tags %}
+            // Add initial tags from document
+            const initialTags = "{{ document.tags }}".split(',');
+            initialTags.forEach(tag => {
+                if (tag.trim()) {
+                    addTagPill(tag.trim());
+                }
+            });
+        {% endif %}
+        // Step navigation
+        const steps = ['step1', 'step2', 'step3', 'step4'];
+        let currentStep = 0;
+        
+        // Next button handlers
+        document.getElementById('to-step2-btn').addEventListener('click', function() {
+            // Validate step 1
+            const title = document.getElementById('id_title').value.trim();
+            if (!title) {
+                document.getElementById('id_title').classList.add('is-invalid');
+                alert('Please enter a document title.');
+                return;
+            }
+            
+            if (!document) {
+                const fileInput = document.getElementById('id_file');
+                if (!fileInput.files || fileInput.files.length === 0) {
+                    alert('Please select a file to upload.');
+                    return;
+                }
+            }
+            
+            goToStep(1);
+        });
+        
+        document.getElementById('to-step3-btn').addEventListener('click', function() {
+            // Validate step 2
+            const selectedCategories = document.querySelectorAll('.category-checkbox:checked');
+            if (selectedCategories.length === 0) {
+                document.getElementById('categories-error').classList.remove('d-none');
+                return;
+            }
+            
+            goToStep(2);
+        });
+        
+        document.getElementById('to-step4-btn').addEventListener('click', function() {
+            // Update summary before showing
+            updateSummary();
+            goToStep(3);
+        });
+        
+        // Back button handlers
+        document.getElementById('back-to-step1-btn').addEventListener('click', function() {
+            goToStep(0);
+        });
+        
+        document.getElementById('back-to-step2-btn').addEventListener('click', function() {
+            goToStep(1);
+        });
+        
+        document.getElementById('back-to-step3-btn').addEventListener('click', function() {
+            goToStep(2);
+        });
+        
+        function goToStep(stepIndex) {
+            // Hide all steps
+            steps.forEach(step => {
+                document.getElementById(step).classList.remove('active');
+                document.getElementById(`${step}-icon`).classList.remove('active');
+                document.getElementById(`${step}-text`).classList.remove('active');
+            });
+            
+            // Show current step
+            document.getElementById(steps[stepIndex]).classList.add('active');
+            document.getElementById(`${steps[stepIndex]}-icon`).classList.add('active');
+            document.getElementById(`${steps[stepIndex]}-text`).classList.add('active');
+            
+            // Update completed steps
+            for (let i = 0; i < stepIndex; i++) {
+                document.getElementById(`${steps[i]}-icon`).classList.add('completed');
+                document.getElementById(`${steps[i]}-icon`).innerHTML = '<i class="bi bi-check"></i>';
+            }
+            
+            // Reset steps after current
+            for (let i = stepIndex + 1; i < steps.length; i++) {
+                document.getElementById(`${steps[i]}-icon`).classList.remove('completed');
+                document.getElementById(`${steps[i]}-icon`).innerHTML = i + 1;
+            }
+            
+            currentStep = stepIndex;
+        }
+        
+        // File upload handling
+        if (document.getElementById('drop-area')) {
+            const dropArea = document.getElementById('drop-area');
+            const fileInput = document.getElementById('id_file');
+            const browseButton = document.getElementById('browse-files');
+            const filePreview = document.getElementById('file-preview');
+            const fileName = document.getElementById('file-name');
+            const fileSize = document.getElementById('file-size');
+            const previewIcon = document.getElementById('preview-icon');
+            const removeFileButton = document.getElementById('remove-file');
+            
+            // Browse files button
+            browseButton.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            // File input change
+            fileInput.addEventListener('change', function() {
+                displayFilePreview(this.files[0]);
+            });
+            
+            // Drag and drop
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight() {
+                dropArea.classList.add('dragover');
+            }
+            
+            function unhighlight() {
+                dropArea.classList.remove('dragover');
+            }
+            
+            dropArea.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    displayFilePreview(files[0]);
+                }
+            }
+            
+            function displayFilePreview(file) {
+                if (!file) return;
+                
+                fileName.textContent = file.name;
+                fileSize.textContent = `Size: ${formatFileSize(file.size)}`;
+                
+                // Update icon based on file type
+                const fileExtension = file.name.split('.').pop().toLowerCase();
+                
+                if (['pdf'].includes(fileExtension)) {
+                    previewIcon.className = 'bi bi-file-earmark-pdf text-danger preview-icon';
+                } else if (['doc', 'docx'].includes(fileExtension)) {
+                    previewIcon.className = 'bi bi-file-earmark-word text-primary preview-icon';
+                } else if (['xls', 'xlsx'].includes(fileExtension)) {
+                    previewIcon.className = 'bi bi-file-earmark-excel text-success preview-icon';
+                } else if (['ppt', 'pptx'].includes(fileExtension)) {
+                    previewIcon.className = 'bi bi-file-earmark-ppt text-warning preview-icon';
+                } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
+                    previewIcon.className = 'bi bi-file-earmark-image text-info preview-icon';
+                } else {
+                    previewIcon.className = 'bi bi-file-earmark preview-icon';
+                }
+                
+                filePreview.style.display = 'block';
+            }
+            
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+            
+            // Remove file
+            removeFileButton.addEventListener('click', function() {
+                fileInput.value = '';
+                filePreview.style.display = 'none';
+            });
+        }
+        
+        // For edit mode, handle replacement file toggle
+        if (document.getElementById('replace-file-toggle')) {
+            const replaceToggle = document.getElementById('replace-file-toggle');
+            const replacementContainer = document.getElementById('replacement-file-container');
+            
+            replaceToggle.addEventListener('change', function() {
+                if (this.checked) {
+                    replacementContainer.classList.remove('d-none');
+                } else {
+                    replacementContainer.classList.add('d-none');
+                    // Clear the file input
+                    const fileInput = document.getElementById('id_file');
+                    if (fileInput) fileInput.value = '';
+                }
+            });
+        }
+        
+        // Category selection
+        const categoryItems = document.querySelectorAll('.category-item');
+        
+        categoryItems.forEach(item => {
+            item.addEventListener('click', function() {
+                const checkbox = this.querySelector('.category-checkbox');
+                checkbox.checked = !checkbox.checked;
+                
+                if (checkbox.checked) {
+                    this.classList.add('selected');
+                } else {
+                    this.classList.remove('selected');
+                }
+                
+                // Hide error message when categories are selected
+                if (document.querySelectorAll('.category-checkbox:checked').length > 0) {
+                    document.getElementById('categories-error').classList.add('d-none');
+                }
+            });
+        });
+        
+        // Tags handling
+        const tagInput = document.getElementById('tag-input');
+        const tagPills = document.getElementById('tag-pills');
+        const tagsHidden = document.getElementById('tags-hidden');
+        const tagSuggestions = document.getElementById('tag-suggestions');
+        const tagSuggestionItems = document.querySelectorAll('.tag-suggestion-item');
+        
+        // Populate initial tags from hidden input
+        function updateTagPills() {
+            if (!tagsHidden.value) return;
+            
+            const currentTags = tagsHidden.value.split(',').filter(tag => tag.trim() !== '');
+            
+            // Clear pills
+            tagPills.innerHTML = '';
+            
+            // Add pills for each tag
+            currentTags.forEach(tag => {
+                addTagPill(tag.trim());
+            });
+        }
+        
+        // Initialize tags when document loads
+        updateTagPills();
+        
+        function addTagPill(tag) {
+            const pill = document.createElement('div');
+            pill.className = 'tag-pill';
+            pill.innerHTML = `
+                ${tag}
+                <span class="remove-tag"><i class="bi bi-x"></i></span>
+            `;
+            
+            pill.querySelector('.remove-tag').addEventListener('click', function() {
+                pill.remove();
+                updateHiddenTagsInput();
+            });
+            
+            tagPills.appendChild(pill);
+            updateHiddenTagsInput();
+        }
+        
+        function updateHiddenTagsInput() {
+            const currentPills = tagPills.querySelectorAll('.tag-pill');
+            const tags = Array.from(currentPills).map(pill => {
+                return pill.textContent.trim();
+            });
+            
+            tagsHidden.value = tags.join(', ');
+        }
+        
+        // Add tags on input
+        tagInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                
+                const tag = this.value.trim();
+                if (tag) {
+                    addTagPill(tag);
+                    this.value = '';
+                }
+            }
+        });
+        
+        // Focus out adds the tag
+        tagInput.addEventListener('blur', function() {
+            const tag = this.value.trim();
+            if (tag) {
+                addTagPill(tag);
+                this.value = '';
+            }
+        });
+        
+        // Show suggestions on focus
+        tagInput.addEventListener('focus', function() {
+            tagSuggestions.style.display = 'block';
+        });
+        
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            if (e.target !== tagInput && !tagSuggestions.contains(e.target)) {
+                tagSuggestions.style.display = 'none';
+            }
+        });
+        
+        // Add tag from suggestions
+        tagSuggestionItems.forEach(item => {
+            item.addEventListener('click', function() {
+                addTagPill(this.textContent.trim());
+                tagInput.value = '';
+                tagSuggestions.style.display = 'none';
+            });
+        });
+        
+        // Visibility options
+        const visibilityOptions = document.querySelectorAll('.visibility-option');
+        
+        visibilityOptions.forEach(option => {
+            option.addEventListener('click', function() {
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+                
+                // Update UI
+                visibilityOptions.forEach(o => o.classList.remove('selected'));
+                this.classList.add('selected');
+            });
+        });
+        
+        // Update summary before final submission
+        function updateSummary() {
+            document.getElementById('summary-title').textContent = document.getElementById('id_title').value;
+            
+            // File summary
+            if (document) {
+                if (document.getElementById('replace-file-toggle').checked && document.getElementById('id_file').files.length > 0) {
+                    document.getElementById('summary-file').textContent = `New file: ${document.getElementById('id_file').files[0].name}`;
+                } else {
+                    document.getElementById('summary-file').textContent = 'Using existing file (no change)';
+                }
+            } else if (document.getElementById('id_file').files.length > 0) {
+                document.getElementById('summary-file').textContent = document.getElementById('id_file').files[0].name;
+            } else {
+                document.getElementById('summary-file').textContent = 'No file selected';
+            }
+            
+            // Description
+            const description = document.getElementById('id_description').value.trim();
+            document.getElementById('summary-description').textContent = description || 'None provided';
+            
+            // Categories
+            const selectedCategories = document.querySelectorAll('.category-checkbox:checked');
+            if (selectedCategories.length > 0) {
+                const categoryNames = Array.from(selectedCategories).map(checkbox => {
+                    return checkbox.parentElement.querySelector('label').textContent;
+                });
+                document.getElementById('summary-categories').innerHTML = categoryNames.map(name => 
+                    `<span class="badge bg-secondary me-1">${name}</span>`
+                ).join('');
+            } else {
+                document.getElementById('summary-categories').textContent = 'None selected';
+            }
+            
+            // Tags
+            const tags = tagsHidden.value.trim();
+            if (tags) {
+                document.getElementById('summary-tags').innerHTML = tags.split(',').map(tag => 
+                    `<span class="badge bg-info text-dark me-1">${tag.trim()}</span>`
+                ).join('');
+            } else {
+                document.getElementById('summary-tags').textContent = 'None provided';
+            }
+            
+            // Visibility
+            const visibilityValue = document.querySelector('input[name="visibility"]:checked').value;
+            let visibilityText = '';
+            
+            switch (visibilityValue) {
+                case 'PR':
+                    visibilityText = '<i class="bi bi-lock-fill me-1"></i> Private';
+                    break;
+                case 'TM':
+                    visibilityText = '<i class="bi bi-people-fill me-1"></i> Team Only';
+                    break;
+                case 'PB':
+                    visibilityText = '<i class="bi bi-globe me-1"></i> Public';
+                    break;
+            }
+            
+            document.getElementById('summary-visibility').innerHTML = visibilityText;
+        }
+        
+        // Form submission
+        document.getElementById('document-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Final validation
+            const title = document.getElementById('id_title').value.trim();
+            if (!title) {
+                alert('Please enter a document title.');
+                goToStep(0);
+                return;
+            }
+            
+            if (!document) {
+                const fileInput = document.getElementById('id_file');
+                if (!fileInput.files || fileInput.files.length === 0) {
+                    alert('Please select a file to upload.');
+                    goToStep(0);
+                    return;
+                }
+            }
+            
+            const selectedCategories = document.querySelectorAll('.category-checkbox:checked');
+            if (selectedCategories.length === 0) {
+                alert('Please select at least one category.');
+                goToStep(1);
+                return;
+            }
+            
+            // Show loading overlay
+            document.getElementById('loading-overlay').style.display = 'flex';
+            
+            // Submit the form
+            this.submit();
+        });
+    });
+</script>
 {% endblock %}

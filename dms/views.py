@@ -423,7 +423,18 @@ def team_delete(request, pk):
 
 @role_required(['AD'])  # Only admin
 def user_list(request):
+    """Display all users with search functionality"""
     users = User.objects.all().order_by('username')
+    
+    # Handle search
+    search_query = request.GET.get('q')
+    if search_query:
+        users = users.filter(
+            Q(username__icontains=search_query) |
+            Q(first_name__icontains=search_query) |
+            Q(last_name__icontains=search_query) |
+            Q(email__icontains=search_query)
+        )
     
     context = {
         'users': users
@@ -433,83 +444,172 @@ def user_list(request):
 
 @role_required(['AD'])  # Only admin
 def user_create(request):
+    """Create a new user with profile and team assignments"""
     if request.method == 'POST':
-        form = UserRegistrationForm(request.POST)
-        if form.is_valid():
-            # Create user
-            user = form.save(commit=False)
-            user.set_password(form.cleaned_data['password'])
-            user.save()
+        # Get form data
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        confirm_password = request.POST.get('confirm_password')
+        email = request.POST.get('email')
+        first_name = request.POST.get('first_name')
+        last_name = request.POST.get('last_name')
+        role = request.POST.get('role')
+        team_ids = request.POST.getlist('teams')
+        
+        # Validate data
+        if not username:
+            messages.error(request, 'Username is required.')
+            return redirect('dms:user_create')
+            
+        if not password:
+            messages.error(request, 'Password is required.')
+            return redirect('dms:user_create')
+            
+        if password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+            return redirect('dms:user_create')
+            
+        if User.objects.filter(username=username).exists():
+            messages.error(request, f'Username "{username}" is already taken.')
+            return redirect('dms:user_create')
+        
+        # Create user
+        try:
+            new_user = User.objects.create_user(
+                username=username,
+                password=password,
+                email=email,
+                first_name=first_name,
+                last_name=last_name
+            )
             
             # Set user role
-            profile = user.profile
-            profile.role = form.cleaned_data['role']
+            profile, created = UserProfile.objects.get_or_create(user=new_user)
+            profile.role = role
             profile.save()
             
             # Add user to teams
-            teams = form.cleaned_data.get('teams')
-            if teams:
+            if team_ids:
+                teams = Team.objects.filter(id__in=team_ids)
                 for team in teams:
-                    team.members.add(user)
+                    team.members.add(new_user)
             
-            messages.success(request, f"User '{user.username}' created successfully.")
+            messages.success(request, f'User "{username}" created successfully.')
             return redirect('dms:user_list')
-    else:
-        form = UserRegistrationForm()
+            
+        except Exception as e:
+            messages.error(request, f'Error creating user: {str(e)}')
+            return redirect('dms:user_create')
     
-    return render(request, 'dms/user_form.html', {'form': form})
+    # GET request - display form
+    # No "pk" parameter needed here since we're creating a new user
+    form = UserRegistrationForm()  # This is just for the team queryset
+    
+    context = {
+        'form': form,
+    }
+    
+    return render(request, 'dms/user_form.html', context)
 
 @role_required(['AD'])  # Only admin
 def user_update(request, pk):
+    """Update an existing user"""
     user = get_object_or_404(User, pk=pk)
+    
     if request.method == 'POST':
-        form = UserRegistrationForm(request.POST, instance=user)
-        if form.is_valid():
-            # Update user
-            user = form.save(commit=False)
+        # Get form data
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        confirm_password = request.POST.get('confirm_password')
+        email = request.POST.get('email')
+        first_name = request.POST.get('first_name')
+        last_name = request.POST.get('last_name')
+        role = request.POST.get('role')
+        team_ids = request.POST.getlist('teams')
+        
+        # Validate data
+        if not username:
+            messages.error(request, 'Username is required.')
+            return redirect('dms:user_update', pk=pk)
             
-            # Only set password if it was changed
-            if form.cleaned_data['password']:
-                user.set_password(form.cleaned_data['password'])
+        if password and password != confirm_password:
+            messages.error(request, 'Passwords do not match.')
+            return redirect('dms:user_update', pk=pk)
             
+        if User.objects.filter(username=username).exclude(pk=pk).exists():
+            messages.error(request, f'Username "{username}" is already taken.')
+            return redirect('dms:user_update', pk=pk)
+        
+        # Update user
+        try:
+            user.username = username
+            user.email = email
+            user.first_name = first_name
+            user.last_name = last_name
+            
+            # Update password if provided
+            if password:
+                user.set_password(password)
+                
             user.save()
             
-            # Set user role
-            profile = user.profile
-            profile.role = form.cleaned_data['role']
+            # Update user role
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            profile.role = role
             profile.save()
             
-            # Update teams
+            # Update team assignments
             current_teams = user.teams.all()
-            new_teams = form.cleaned_data.get('teams', [])
             
             # Remove from teams not in selection
             for team in current_teams:
-                if team not in new_teams:
+                if str(team.id) not in team_ids:
                     team.members.remove(user)
             
             # Add to new teams
-            for team in new_teams:
-                if team not in current_teams:
-                    team.members.add(user)
+            if team_ids:
+                for team_id in team_ids:
+                    team = Team.objects.get(id=team_id)
+                    if team not in current_teams:
+                        team.members.add(user)
             
-            messages.success(request, f"User '{user.username}' updated successfully.")
+            messages.success(request, f'User "{username}" updated successfully.')
+            
+            # Check if the admin updated their own account
+            if user == request.user and password:
+                messages.info(request, 'You changed your own password. Please log in again.')
+                return redirect('logout')
+                
             return redirect('dms:user_list')
-    else:
-        # Pre-populate the form
-        initial_data = {
-            'role': user.profile.role,
-            'teams': user.teams.all(),
-        }
-        form = UserRegistrationForm(instance=user, initial=initial_data)
-        # Make password fields not required for update
-        form.fields['password'].required = False
-        form.fields['confirm_password'].required = False
+            
+        except Exception as e:
+            messages.error(request, f'Error updating user: {str(e)}')
+            return redirect('dms:user_update', pk=pk)
     
-    return render(request, 'dms/user_form.html', {'form': form, 'user_obj': user})
+    # GET request - display form
+    form = UserRegistrationForm()
+    
+    # Pre-populate the form
+    initial_data = {
+        'role': user.profile.role if hasattr(user, 'profile') else 'TM',
+        'teams': user.teams.all(),
+    }
+    form = UserRegistrationForm(instance=user, initial=initial_data)
+    
+    # Make password fields not required for update
+    form.fields['password'].required = False
+    form.fields['confirm_password'].required = False
+    
+    context = {
+        'form': form,
+        'user_obj': user
+    }
+    
+    return render(request, 'dms/user_form.html', context)
 
 @role_required(['AD'])  # Only admin
 def user_delete(request, pk):
+    """Delete user with confirmation"""
     user = get_object_or_404(User, pk=pk)
     
     # Prevent deleting yourself
@@ -519,8 +619,37 @@ def user_delete(request, pk):
     
     if request.method == 'POST':
         username = user.username
-        user.delete()
-        messages.success(request, f"User '{username}' deleted successfully.")
+        try:
+            # Delete user
+            user.delete()
+            messages.success(request, f"User '{username}' deleted successfully.")
+        except Exception as e:
+            messages.error(request, f"Error deleting user: {str(e)}")
+    
+    return redirect('dms:user_list')
+
+# Helper function to fix missing profiles
+@role_required(['AD'])  # Only admin
+def fix_user_profiles(request):
+    """Fix missing user profiles"""
+    users_without_profiles = []
+    
+    for current_user in User.objects.all():
+        try:
+            # Check if user has a profile
+            profile = current_user.profile
+        except UserProfile.DoesNotExist:
+            # Create profile if it doesn't exist
+            profile = UserProfile.objects.create(user=current_user)
+            users_without_profiles.append(current_user.username)
+    
+    if users_without_profiles:
+        messages.success(
+            request, 
+            f"Fixed profiles for the following users: {', '.join(users_without_profiles)}"
+        )
+    else:
+        messages.info(request, "All users already have profiles.")
     
     return redirect('dms:user_list')
 
