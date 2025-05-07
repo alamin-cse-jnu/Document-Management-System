@@ -1,0 +1,459 @@
+{% extends 'base.html' %}
+{% block title %}Admin Reports - E-Parliament DMS{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        transition: all 0.2s;
+        height: 100%;
+    }
+    .stats-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+    }
+    .stats-icon {
+        font-size: 2.5rem;
+        opacity: 0.7;
+    }
+    .chart-container {
+        height: 300px;
+    }
+    .report-section {
+        margin-bottom: 2rem;
+    }
+    .report-card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .document-category-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .category-bar {
+        height: 10px;
+        border-radius: 5px;
+        background-color: #f8f9fa;
+    }
+    .category-bar-fill {
+        height: 100%;
+        border-radius: 5px;
+        background-color: var(--bs-primary);
+    }
+    .table-users th, .table-users td {
+        padding: 12px 15px;
+    }
+    .header-with-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header-with-actions mb-4">
+    <div>
+        <h1 class="display-6 fw-bold">Admin Reports Dashboard</h1>
+        <p class="text-muted">Comprehensive overview of system usage and statistics</p>
+    </div>
+    <div>
+        <button id="print-report" class="btn btn-outline-primary">
+            <i class="bi bi-printer me-1"></i> Print Report
+        </button>
+        <button id="export-report" class="btn btn-success">
+            <i class="bi bi-download me-1"></i> Export Data
+        </button>
+    </div>
+</div>
+
+<!-- Top Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card stats-card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50">Total Users</h6>
+                        <h3 class="mb-0">{{ total_users }}</h3>
+                    </div>
+                    <div class="stats-icon">
+                        <i class="bi bi-people"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card stats-card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50">Total Documents</h6>
+                        <h3 class="mb-0">{{ total_documents }}</h3>
+                    </div>
+                    <div class="stats-icon">
+                        <i class="bi bi-file-earmark-text"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card stats-card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50">Teams</h6>
+                        <h3 class="mb-0">{{ total_teams }}</h3>
+                    </div>
+                    <div class="stats-icon">
+                        <i class="bi bi-people-fill"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card stats-card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50">Categories</h6>
+                        <h3 class="mb-0">{{ documents_by_category|length }}</h3>
+                    </div>
+                    <div class="stats-icon">
+                        <i class="bi bi-folder2-open"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left Column - User & Team Stats -->
+    <div class="col-md-6">
+        <!-- User Distribution -->
+        <div class="report-section">
+            <div class="card report-card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-people me-2"></i>User Distribution by Role</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" id="user-role-chart"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Most Active Teams -->
+        <div class="report-section">
+            <div class="card report-card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-people-fill me-2"></i>Teams by Member Count</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Team Name</th>
+                                <th class="text-center">Members</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for team in teams_with_members %}
+                                <tr>
+                                    <td>{{ team.name }}</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary rounded-pill">{{ team.member_count }}</span>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="2" class="text-center text-muted">No teams found</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Most Active Users -->
+        <div class="report-section">
+            <div class="card report-card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-person-badge me-2"></i>Most Active Users</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th class="text-end">Activities</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in most_active_users %}
+                                <tr>
+                                    <td>{{ user.user__username }}</td>
+                                    <td class="text-end">{{ user.action_count }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="2" class="text-center text-muted">No activity data found</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column - Document Stats -->
+    <div class="col-md-6">
+        <!-- Document Visibility -->
+        <div class="report-section">
+            <div class="card report-card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-eye me-2"></i>Document Visibility Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" id="document-visibility-chart"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Document by Category -->
+        <div class="report-section">
+            <div class="card report-card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-folder2 me-2"></i>Documents by Category</h5>
+                </div>
+                <div class="card-body">
+                    {% for category in documents_by_category %}
+                        <div class="document-category-item">
+                            <div class="category-name">{{ category.name }}</div>
+                            <div class="category-count">{{ category.count }}</div>
+                        </div>
+                        <div class="category-bar mb-3">
+                            <div class="category-bar-fill" style="width: {{ category.percentage }}%"></div>
+                        </div>
+                    {% empty %}
+                        <p class="text-center text-muted">No documents found</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Activity -->
+        <div class="report-section">
+            <div class="card report-card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0"><i class="bi bi-activity me-2"></i>Activity by Type</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" id="activity-type-chart"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Documents Table -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card report-card">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Recent Documents</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped table-users mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Title</th>
+                                <th>Owner</th>
+                                <th>Categories</th>
+                                <th>Visibility</th>
+                                <th>Upload Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for document in recent_documents %}
+                                <tr>
+                                    <td>
+                                        <a href="{% url 'dms:document_detail' document.id %}">{{ document.title }}</a>
+                                    </td>
+                                    <td>{{ document.owner.username }}</td>
+                                    <td>
+                                        {% for category in document.categories.all %}
+                                            <span class="badge bg-secondary">{{ category.name }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>{{ document.get_visibility_display }}</td>
+                                    <td>{{ document.upload_date|date:"M d, Y" }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No documents found</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // User roles distribution chart
+        const userRolesCtx = document.getElementById('user-role-chart').getContext('2d');
+        const userRolesData = {
+            labels: [
+                {% for role_name, count in users_by_role.items %}
+                    '{{ role_name }}',
+                {% endfor %}
+            ],
+            datasets: [{
+                label: 'Users by Role',
+                data: [
+                    {% for role_name, count in users_by_role.items %}
+                        {{ count }},
+                    {% endfor %}
+                ],
+                backgroundColor: [
+                    '#dc3545', // Admin
+                    '#6f42c1', // Consultant
+                    '#0d6efd', // Official
+                    '#fd7e14', // Committee
+                    '#198754', // Team Leader
+                    '#6c757d'  // Team Member
+                ]
+            }]
+        };
+        new Chart(userRolesCtx, {
+            type: 'doughnut',
+            data: userRolesData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+        
+        // Document visibility chart
+        const visibilityCtx = document.getElementById('document-visibility-chart').getContext('2d');
+        const visibilityData = {
+            labels: ['Private', 'Team', 'Public'],
+            datasets: [{
+                label: 'Documents by Visibility',
+                data: [
+                    {{ visibility_counts.Private }},
+                    {{ visibility_counts.Team }},
+                    {{ visibility_counts.Public }}
+                ],
+                backgroundColor: [
+                    '#6c757d', // Private
+                    '#0d6efd', // Team
+                    '#198754'  // Public
+                ]
+            }]
+        };
+        new Chart(visibilityCtx, {
+            type: 'pie',
+            data: visibilityData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+        
+        // Activity type chart
+        const activityCtx = document.getElementById('activity-type-chart').getContext('2d');
+        const activityData = {
+            labels: [
+                {% for action_name, count in activity_counts.items %}
+                    '{{ action_name }}',
+                {% endfor %}
+            ],
+            datasets: [{
+                label: 'Activity Count',
+                data: [
+                    {% for action_name, count in activity_counts.items %}
+                        {{ count }},
+                    {% endfor %}
+                ],
+                backgroundColor: [
+                    '#20c997', // Upload
+                    '#0d6efd', // Download
+                    '#6c757d', // View
+                    '#fd7e14', // Edit
+                    '#6f42c1', // Share
+                    '#dc3545'  // Delete
+                ]
+            }]
+        };
+        new Chart(activityCtx, {
+            type: 'bar',
+            data: activityData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+        
+        // Print report functionality
+        document.getElementById('print-report').addEventListener('click', function() {
+            window.print();
+        });
+        
+        // Export data functionality
+        document.getElementById('export-report').addEventListener('click', function() {
+            // This would typically call an endpoint that returns CSV/Excel data
+            // For a simple implementation, we'll just create a CSV from the document categories
+            let csvContent = "Category,Document Count,Percentage\n";
+            
+            {% for category in documents_by_category %}
+                csvContent += "{{ category.name }},{{ category.count }},{{ category.percentage|floatformat:2 }}%\n";
+            {% endfor %}
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'document_categories_report.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    });
+</script>
+{% endblock %}

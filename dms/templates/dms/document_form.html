@@ -8,6 +8,7 @@
 
 {% block extra_css %}
 <style>
+    /* All the CSS styles remain the same */
     .upload-container {
         max-width: 900px;
         margin: 0 auto;
@@ -281,7 +282,7 @@
                 </div>
             </div>
             
-            <form method="post" enctype="multipart/form-data" id="document-form" novalidate>
+            <form method="post" enctype="multipart/form-data" id="document-form">
                 {% csrf_token %}
                 
                 <!-- Step 1: Basic Document Info -->
@@ -441,7 +442,7 @@
                         
                         <div class="tag-pills" id="tag-pills">
                             {% if document and document.tags %}
-                                <!-- We'll load these tags with JavaScript instead -->
+                                <!-- Tags will be loaded with JavaScript -->
                             {% endif %}
                         </div>
                     </div>
@@ -578,34 +579,220 @@
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // If document exists and has tags, initialize the tag pills
-        {% if document and document.tags %}
-            // Add initial tags from document
-            const initialTags = "{{ document.tags }}".split(',');
-            initialTags.forEach(tag => {
+document.addEventListener('DOMContentLoaded', function() {
+    // Define global variables
+    let currentStep = 0;
+    const steps = ['step1', 'step2', 'step3', 'step4'];
+    
+    // Function to go to a specific step
+    function goToStep(stepIndex) {
+        // Hide all steps
+        for (let i = 0; i < steps.length; i++) {
+            const step = document.getElementById(steps[i]);
+            const stepIcon = document.getElementById(`${steps[i]}-icon`);
+            const stepText = document.getElementById(`${steps[i]}-text`);
+            
+            if (step) step.classList.remove('active');
+            if (stepIcon) {
+                stepIcon.classList.remove('active');
+                stepIcon.classList.remove('completed');
+                stepIcon.innerHTML = i + 1;
+            }
+            if (stepText) stepText.classList.remove('active');
+        }
+        
+        // Show current step
+        const currentStepElement = document.getElementById(steps[stepIndex]);
+        const currentStepIcon = document.getElementById(`${steps[stepIndex]}-icon`);
+        const currentStepText = document.getElementById(`${steps[stepIndex]}-text`);
+        
+        if (currentStepElement) currentStepElement.classList.add('active');
+        if (currentStepIcon) currentStepIcon.classList.add('active');
+        if (currentStepText) currentStepText.classList.add('active');
+        
+        // Mark completed steps
+        for (let i = 0; i < stepIndex; i++) {
+            const completedStepIcon = document.getElementById(`${steps[i]}-icon`);
+            if (completedStepIcon) {
+                completedStepIcon.classList.add('completed');
+                completedStepIcon.innerHTML = '<i class="bi bi-check"></i>';
+            }
+        }
+        
+        // Update current step index
+        currentStep = stepIndex;
+        
+        // Update summary when going to step 4
+        if (stepIndex === 3) {
+            updateSummary();
+        }
+    }
+    
+    // Function to update summary
+    function updateSummary() {
+        try {
+            // Title
+            const titleElement = document.getElementById('summary-title');
+            const titleValue = document.getElementById('id_title').value.trim();
+            if (titleElement) titleElement.textContent = titleValue || 'Not provided';
+            
+            // File
+            const fileElement = document.getElementById('summary-file');
+            const fileInput = document.getElementById('id_file');
+            const replaceToggle = document.getElementById('replace-file-toggle');
+            
+            if (fileElement) {
+                if (replaceToggle && replaceToggle.checked && fileInput && fileInput.files.length > 0) {
+                    fileElement.textContent = `New file: ${fileInput.files[0].name}`;
+                } else if (replaceToggle) {
+                    fileElement.textContent = 'Using existing file (no change)';
+                } else if (fileInput && fileInput.files.length > 0) {
+                    fileElement.textContent = fileInput.files[0].name;
+                } else {
+                    fileElement.textContent = 'No file selected';
+                }
+            }
+            
+            // Description
+            const descElement = document.getElementById('summary-description');
+            const descValue = document.getElementById('id_description').value.trim();
+            if (descElement) descElement.textContent = descValue || 'None provided';
+            
+            // Categories
+            const categoriesElement = document.getElementById('summary-categories');
+            const selectedCategories = document.querySelectorAll('.category-checkbox:checked');
+            if (categoriesElement) {
+                if (selectedCategories.length > 0) {
+                    let categoryHtml = '';
+                    selectedCategories.forEach(checkbox => {
+                        const label = checkbox.parentElement.querySelector('label');
+                        if (label) {
+                            categoryHtml += `<span class="badge bg-secondary me-1">${label.textContent}</span>`;
+                        }
+                    });
+                    categoriesElement.innerHTML = categoryHtml;
+                } else {
+                    categoriesElement.textContent = 'None selected';
+                }
+            }
+            
+            // Tags
+            const tagsElement = document.getElementById('summary-tags');
+            const tagsValue = document.getElementById('tags-hidden').value.trim();
+            if (tagsElement) {
+                if (tagsValue) {
+                    let tagsHtml = '';
+                    tagsValue.split(',').forEach(tag => {
+                        if (tag.trim()) {
+                            tagsHtml += `<span class="badge bg-info text-dark me-1">${tag.trim()}</span>`;
+                        }
+                    });
+                    tagsElement.innerHTML = tagsHtml;
+                } else {
+                    tagsElement.textContent = 'None provided';
+                }
+            }
+            
+            // Visibility
+            const visibilityElement = document.getElementById('summary-visibility');
+            const visibilityRadio = document.querySelector('input[name="visibility"]:checked');
+            const visibilityValue = visibilityRadio ? visibilityRadio.value : 'PR';
+            
+            if (visibilityElement) {
+                let visibilityText = '';
+                switch (visibilityValue) {
+                    case 'PR':
+                        visibilityText = '<i class="bi bi-lock-fill me-1"></i> Private';
+                        break;
+                    case 'TM':
+                        visibilityText = '<i class="bi bi-people-fill me-1"></i> Team Only';
+                        break;
+                    case 'PB':
+                        visibilityText = '<i class="bi bi-globe me-1"></i> Public';
+                        break;
+                }
+                visibilityElement.innerHTML = visibilityText;
+            }
+        } catch (error) {
+            console.error('Error updating summary:', error);
+        }
+    }
+    
+    // Initialize tag pills for existing document
+    function initTagPills() {
+        const tagsHidden = document.getElementById('tags-hidden');
+        if (tagsHidden && tagsHidden.value) {
+            const tags = tagsHidden.value.split(',');
+            tags.forEach(tag => {
                 if (tag.trim()) {
                     addTagPill(tag.trim());
                 }
             });
-        {% endif %}
-        // Step navigation
-        const steps = ['step1', 'step2', 'step3', 'step4'];
-        let currentStep = 0;
+        }
+    }
+    
+    // Call initialization functions
+    initTagPills();
+    
+    // Function to add a tag pill
+    function addTagPill(tag) {
+        const tagPills = document.getElementById('tag-pills');
+        if (!tagPills) return;
         
-        // Next button handlers
-        document.getElementById('to-step2-btn').addEventListener('click', function() {
+        const pill = document.createElement('div');
+        pill.className = 'tag-pill';
+        pill.innerHTML = `
+            ${tag}
+            <span class="remove-tag"><i class="bi bi-x"></i></span>
+        `;
+        
+        const removeBtn = pill.querySelector('.remove-tag');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', function() {
+                pill.remove();
+                updateHiddenTagsInput();
+            });
+        }
+        
+        tagPills.appendChild(pill);
+        updateHiddenTagsInput();
+    }
+    
+    // Function to update hidden tags input
+    function updateHiddenTagsInput() {
+        const tagPills = document.getElementById('tag-pills');
+        const tagsHidden = document.getElementById('tags-hidden');
+        if (!tagPills || !tagsHidden) return;
+        
+        const pills = tagPills.querySelectorAll('.tag-pill');
+        const tags = Array.from(pills).map(pill => {
+            // Get text content without the "×" button text
+            const text = pill.textContent.trim();
+            return text.replace(/\s*×\s*$/, '').trim();
+        });
+        
+        tagsHidden.value = tags.join(',');
+    }
+    
+    // Set up event listeners for navigation buttons
+    const toStep2Btn = document.getElementById('to-step2-btn');
+    if (toStep2Btn) {
+        toStep2Btn.addEventListener('click', function() {
             // Validate step 1
             const title = document.getElementById('id_title').value.trim();
             if (!title) {
-                document.getElementById('id_title').classList.add('is-invalid');
                 alert('Please enter a document title.');
                 return;
             }
             
-            if (!document) {
+            // Check if we're in create or edit mode
+            const replaceToggle = document.getElementById('replace-file-toggle');
+            const isEditMode = replaceToggle !== null;
+            
+            // If in create mode, check if file is selected
+            if (!isEditMode) {
                 const fileInput = document.getElementById('id_file');
-                if (!fileInput.files || fileInput.files.length === 0) {
+                if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
                     alert('Please select a file to upload.');
                     return;
                 }
@@ -613,190 +800,177 @@
             
             goToStep(1);
         });
-        
-        document.getElementById('to-step3-btn').addEventListener('click', function() {
+    }
+    
+    const toStep3Btn = document.getElementById('to-step3-btn');
+    if (toStep3Btn) {
+        toStep3Btn.addEventListener('click', function() {
             // Validate step 2
             const selectedCategories = document.querySelectorAll('.category-checkbox:checked');
             if (selectedCategories.length === 0) {
-                document.getElementById('categories-error').classList.remove('d-none');
+                const errorMsg = document.getElementById('categories-error');
+                if (errorMsg) errorMsg.classList.remove('d-none');
                 return;
             }
             
             goToStep(2);
         });
-        
-        document.getElementById('to-step4-btn').addEventListener('click', function() {
-            // Update summary before showing
-            updateSummary();
+    }
+    
+    const toStep4Btn = document.getElementById('to-step4-btn');
+    if (toStep4Btn) {
+        toStep4Btn.addEventListener('click', function() {
             goToStep(3);
         });
-        
-        // Back button handlers
-        document.getElementById('back-to-step1-btn').addEventListener('click', function() {
+    }
+    
+    const backToStep1Btn = document.getElementById('back-to-step1-btn');
+    if (backToStep1Btn) {
+        backToStep1Btn.addEventListener('click', function() {
             goToStep(0);
         });
-        
-        document.getElementById('back-to-step2-btn').addEventListener('click', function() {
+    }
+    
+    const backToStep2Btn = document.getElementById('back-to-step2-btn');
+    if (backToStep2Btn) {
+        backToStep2Btn.addEventListener('click', function() {
             goToStep(1);
         });
-        
-        document.getElementById('back-to-step3-btn').addEventListener('click', function() {
+    }
+    
+    const backToStep3Btn = document.getElementById('back-to-step3-btn');
+    if (backToStep3Btn) {
+        backToStep3Btn.addEventListener('click', function() {
             goToStep(2);
         });
+    }
+    
+    // Set up file upload handling
+    const dropArea = document.getElementById('drop-area');
+    const fileInput = document.getElementById('id_file');
+    const browseFilesBtn = document.getElementById('browse-files');
+    const filePreview = document.getElementById('file-preview');
+    
+    if (dropArea && fileInput && browseFilesBtn) {
+        // Browse files button
+        browseFilesBtn.addEventListener('click', function() {
+            fileInput.click();
+        });
         
-        function goToStep(stepIndex) {
-            // Hide all steps
-            steps.forEach(step => {
-                document.getElementById(step).classList.remove('active');
-                document.getElementById(`${step}-icon`).classList.remove('active');
-                document.getElementById(`${step}-text`).classList.remove('active');
-            });
-            
-            // Show current step
-            document.getElementById(steps[stepIndex]).classList.add('active');
-            document.getElementById(`${steps[stepIndex]}-icon`).classList.add('active');
-            document.getElementById(`${steps[stepIndex]}-text`).classList.add('active');
-            
-            // Update completed steps
-            for (let i = 0; i < stepIndex; i++) {
-                document.getElementById(`${steps[i]}-icon`).classList.add('completed');
-                document.getElementById(`${steps[i]}-icon`).innerHTML = '<i class="bi bi-check"></i>';
-            }
-            
-            // Reset steps after current
-            for (let i = stepIndex + 1; i < steps.length; i++) {
-                document.getElementById(`${steps[i]}-icon`).classList.remove('completed');
-                document.getElementById(`${steps[i]}-icon`).innerHTML = i + 1;
-            }
-            
-            currentStep = stepIndex;
-        }
-        
-        // File upload handling
-        if (document.getElementById('drop-area')) {
-            const dropArea = document.getElementById('drop-area');
-            const fileInput = document.getElementById('id_file');
-            const browseButton = document.getElementById('browse-files');
-            const filePreview = document.getElementById('file-preview');
-            const fileName = document.getElementById('file-name');
-            const fileSize = document.getElementById('file-size');
-            const previewIcon = document.getElementById('preview-icon');
-            const removeFileButton = document.getElementById('remove-file');
-            
-            // Browse files button
-            browseButton.addEventListener('click', function() {
-                fileInput.click();
-            });
-            
-            // File input change
-            fileInput.addEventListener('change', function() {
+        // File input change
+        fileInput.addEventListener('change', function() {
+            if (this.files && this.files.length > 0) {
                 displayFilePreview(this.files[0]);
-            });
-            
-            // Drag and drop
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropArea.addEventListener(eventName, preventDefaults, false);
-            });
-            
-            function preventDefaults(e) {
-                e.preventDefault();
-                e.stopPropagation();
             }
-            
-            ['dragenter', 'dragover'].forEach(eventName => {
-                dropArea.addEventListener(eventName, highlight, false);
-            });
-            
-            ['dragleave', 'drop'].forEach(eventName => {
-                dropArea.addEventListener(eventName, unhighlight, false);
-            });
-            
-            function highlight() {
+        });
+        
+        // Drag and drop functionality
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, function() {
                 dropArea.classList.add('dragover');
-            }
-            
-            function unhighlight() {
+            });
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, function() {
                 dropArea.classList.remove('dragover');
-            }
-            
-            dropArea.addEventListener('drop', handleDrop, false);
-            
-            function handleDrop(e) {
-                const dt = e.dataTransfer;
-                const files = dt.files;
-                
-                if (files.length > 0) {
-                    fileInput.files = files;
-                    displayFilePreview(files[0]);
-                }
-            }
-            
-            function displayFilePreview(file) {
-                if (!file) return;
-                
-                fileName.textContent = file.name;
-                fileSize.textContent = `Size: ${formatFileSize(file.size)}`;
-                
-                // Update icon based on file type
-                const fileExtension = file.name.split('.').pop().toLowerCase();
-                
-                if (['pdf'].includes(fileExtension)) {
-                    previewIcon.className = 'bi bi-file-earmark-pdf text-danger preview-icon';
-                } else if (['doc', 'docx'].includes(fileExtension)) {
-                    previewIcon.className = 'bi bi-file-earmark-word text-primary preview-icon';
-                } else if (['xls', 'xlsx'].includes(fileExtension)) {
-                    previewIcon.className = 'bi bi-file-earmark-excel text-success preview-icon';
-                } else if (['ppt', 'pptx'].includes(fileExtension)) {
-                    previewIcon.className = 'bi bi-file-earmark-ppt text-warning preview-icon';
-                } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
-                    previewIcon.className = 'bi bi-file-earmark-image text-info preview-icon';
-                } else {
-                    previewIcon.className = 'bi bi-file-earmark preview-icon';
-                }
-                
-                filePreview.style.display = 'block';
-            }
-            
-            function formatFileSize(bytes) {
-                if (bytes === 0) return '0 Bytes';
-                
-                const k = 1024;
-                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                
-                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-            }
-            
-            // Remove file
-            removeFileButton.addEventListener('click', function() {
-                fileInput.value = '';
-                filePreview.style.display = 'none';
             });
+        });
+        
+        dropArea.addEventListener('drop', function(e) {
+            const dt = e.dataTransfer;
+            if (dt.files && dt.files.length > 0) {
+                fileInput.files = dt.files;
+                displayFilePreview(dt.files[0]);
+            }
+        });
+    }
+    
+    // Function to display file preview
+    function displayFilePreview(file) {
+        if (!file || !filePreview) return;
+        
+        const fileName = document.getElementById('file-name');
+        const fileSize = document.getElementById('file-size');
+        const previewIcon = document.getElementById('preview-icon');
+        
+        if (fileName) fileName.textContent = file.name;
+        if (fileSize) fileSize.textContent = `Size: ${formatFileSize(file.size)}`;
+        
+        // Update icon based on file type
+        if (previewIcon) {
+            const fileExtension = file.name.split('.').pop().toLowerCase();
+            
+            if (['pdf'].includes(fileExtension)) {
+                previewIcon.className = 'bi bi-file-earmark-pdf text-danger preview-icon';
+            } else if (['doc', 'docx'].includes(fileExtension)) {
+                previewIcon.className = 'bi bi-file-earmark-word text-primary preview-icon';
+            } else if (['xls', 'xlsx'].includes(fileExtension)) {
+                previewIcon.className = 'bi bi-file-earmark-excel text-success preview-icon';
+            } else if (['ppt', 'pptx'].includes(fileExtension)) {
+                previewIcon.className = 'bi bi-file-earmark-ppt text-warning preview-icon';
+            } else if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
+                previewIcon.className = 'bi bi-file-earmark-image text-info preview-icon';
+            } else {
+                previewIcon.className = 'bi bi-file-earmark preview-icon';
+            }
         }
         
-        // For edit mode, handle replacement file toggle
-        if (document.getElementById('replace-file-toggle')) {
-            const replaceToggle = document.getElementById('replace-file-toggle');
-            const replacementContainer = document.getElementById('replacement-file-container');
-            
-            replaceToggle.addEventListener('change', function() {
-                if (this.checked) {
-                    replacementContainer.classList.remove('d-none');
-                } else {
-                    replacementContainer.classList.add('d-none');
-                    // Clear the file input
-                    const fileInput = document.getElementById('id_file');
-                    if (fileInput) fileInput.value = '';
-                }
-            });
-        }
+        filePreview.style.display = 'block';
+    }
+    
+    // Format file size
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
         
-        // Category selection
-        const categoryItems = document.querySelectorAll('.category-item');
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
         
-        categoryItems.forEach(item => {
-            item.addEventListener('click', function() {
-                const checkbox = this.querySelector('.category-checkbox');
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    // Set up remove file button
+    const removeFileBtn = document.getElementById('remove-file');
+    if (removeFileBtn && fileInput && filePreview) {
+        removeFileBtn.addEventListener('click', function() {
+            fileInput.value = '';
+            filePreview.style.display = 'none';
+        });
+    }
+    
+    // Set up file replacement toggle for edit mode
+    const replaceFileToggle = document.getElementById('replace-file-toggle');
+    const replacementContainer = document.getElementById('replacement-file-container');
+    if (replaceFileToggle && replacementContainer) {
+        replaceFileToggle.addEventListener('change', function() {
+            if (this.checked) {
+                replacementContainer.classList.remove('d-none');
+            } else {
+                replacementContainer.classList.add('d-none');
+                
+                // Clear the file input
+                const editFileInput = document.getElementById('id_file');
+                if (editFileInput) editFileInput.value = '';
+            }
+        });
+    }
+    
+    // Set up category item click handlers
+    const categoryItems = document.querySelectorAll('.category-item');
+    categoryItems.forEach(item => {
+        item.addEventListener('click', function() {
+            const checkbox = this.querySelector('.category-checkbox');
+            if (checkbox) {
                 checkbox.checked = !checkbox.checked;
                 
                 if (checkbox.checked) {
@@ -805,64 +979,19 @@
                     this.classList.remove('selected');
                 }
                 
-                // Hide error message when categories are selected
-                if (document.querySelectorAll('.category-checkbox:checked').length > 0) {
-                    document.getElementById('categories-error').classList.add('d-none');
+                // Hide error message if any categories are selected
+                const errorMsg = document.getElementById('categories-error');
+                const selectedCategories = document.querySelectorAll('.category-checkbox:checked');
+                if (errorMsg && selectedCategories.length > 0) {
+                    errorMsg.classList.add('d-none');
                 }
-            });
+            }
         });
-        
-        // Tags handling
-        const tagInput = document.getElementById('tag-input');
-        const tagPills = document.getElementById('tag-pills');
-        const tagsHidden = document.getElementById('tags-hidden');
-        const tagSuggestions = document.getElementById('tag-suggestions');
-        const tagSuggestionItems = document.querySelectorAll('.tag-suggestion-item');
-        
-        // Populate initial tags from hidden input
-        function updateTagPills() {
-            if (!tagsHidden.value) return;
-            
-            const currentTags = tagsHidden.value.split(',').filter(tag => tag.trim() !== '');
-            
-            // Clear pills
-            tagPills.innerHTML = '';
-            
-            // Add pills for each tag
-            currentTags.forEach(tag => {
-                addTagPill(tag.trim());
-            });
-        }
-        
-        // Initialize tags when document loads
-        updateTagPills();
-        
-        function addTagPill(tag) {
-            const pill = document.createElement('div');
-            pill.className = 'tag-pill';
-            pill.innerHTML = `
-                ${tag}
-                <span class="remove-tag"><i class="bi bi-x"></i></span>
-            `;
-            
-            pill.querySelector('.remove-tag').addEventListener('click', function() {
-                pill.remove();
-                updateHiddenTagsInput();
-            });
-            
-            tagPills.appendChild(pill);
-            updateHiddenTagsInput();
-        }
-        
-        function updateHiddenTagsInput() {
-            const currentPills = tagPills.querySelectorAll('.tag-pill');
-            const tags = Array.from(currentPills).map(pill => {
-                return pill.textContent.trim();
-            });
-            
-            tagsHidden.value = tags.join(', ');
-        }
-        
+    });
+    
+    // Set up tag input handling
+    const tagInput = document.getElementById('tag-input');
+    if (tagInput) {
         // Add tags on input
         tagInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.key === ',') {
@@ -876,7 +1005,7 @@
             }
         });
         
-        // Focus out adds the tag
+        // Add tag on blur
         tagInput.addEventListener('blur', function() {
             const tag = this.value.trim();
             if (tag) {
@@ -886,105 +1015,53 @@
         });
         
         // Show suggestions on focus
-        tagInput.addEventListener('focus', function() {
-            tagSuggestions.style.display = 'block';
-        });
-        
-        // Hide suggestions when clicking outside
-        document.addEventListener('click', function(e) {
-            if (e.target !== tagInput && !tagSuggestions.contains(e.target)) {
-                tagSuggestions.style.display = 'none';
-            }
-        });
-        
-        // Add tag from suggestions
-        tagSuggestionItems.forEach(item => {
-            item.addEventListener('click', function() {
-                addTagPill(this.textContent.trim());
-                tagInput.value = '';
-                tagSuggestions.style.display = 'none';
+        const tagSuggestions = document.getElementById('tag-suggestions');
+        if (tagSuggestions) {
+            tagInput.addEventListener('focus', function() {
+                tagSuggestions.style.display = 'block';
             });
-        });
-        
-        // Visibility options
-        const visibilityOptions = document.querySelectorAll('.visibility-option');
-        
-        visibilityOptions.forEach(option => {
-            option.addEventListener('click', function() {
-                const radio = this.querySelector('input[type="radio"]');
+            
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', function(e) {
+                if (e.target !== tagInput && !tagSuggestions.contains(e.target)) {
+                    tagSuggestions.style.display = 'none';
+                }
+            });
+            
+            // Set up tag suggestion items
+            const tagSuggestionItems = document.querySelectorAll('.tag-suggestion-item');
+            tagSuggestionItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const tag = this.textContent.trim();
+                    if (tag) {
+                        addTagPill(tag);
+                        tagInput.value = '';
+                        tagSuggestions.style.display = 'none';
+                    }
+                });
+            });
+        }
+    }
+    
+    // Set up visibility option click handlers
+    const visibilityOptions = document.querySelectorAll('.visibility-option');
+    visibilityOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            const radio = this.querySelector('input[type="radio"]');
+            if (radio) {
                 radio.checked = true;
                 
                 // Update UI
                 visibilityOptions.forEach(o => o.classList.remove('selected'));
                 this.classList.add('selected');
-            });
+            }
         });
-        
-        // Update summary before final submission
-        function updateSummary() {
-            document.getElementById('summary-title').textContent = document.getElementById('id_title').value;
-            
-            // File summary
-            if (document) {
-                if (document.getElementById('replace-file-toggle').checked && document.getElementById('id_file').files.length > 0) {
-                    document.getElementById('summary-file').textContent = `New file: ${document.getElementById('id_file').files[0].name}`;
-                } else {
-                    document.getElementById('summary-file').textContent = 'Using existing file (no change)';
-                }
-            } else if (document.getElementById('id_file').files.length > 0) {
-                document.getElementById('summary-file').textContent = document.getElementById('id_file').files[0].name;
-            } else {
-                document.getElementById('summary-file').textContent = 'No file selected';
-            }
-            
-            // Description
-            const description = document.getElementById('id_description').value.trim();
-            document.getElementById('summary-description').textContent = description || 'None provided';
-            
-            // Categories
-            const selectedCategories = document.querySelectorAll('.category-checkbox:checked');
-            if (selectedCategories.length > 0) {
-                const categoryNames = Array.from(selectedCategories).map(checkbox => {
-                    return checkbox.parentElement.querySelector('label').textContent;
-                });
-                document.getElementById('summary-categories').innerHTML = categoryNames.map(name => 
-                    `<span class="badge bg-secondary me-1">${name}</span>`
-                ).join('');
-            } else {
-                document.getElementById('summary-categories').textContent = 'None selected';
-            }
-            
-            // Tags
-            const tags = tagsHidden.value.trim();
-            if (tags) {
-                document.getElementById('summary-tags').innerHTML = tags.split(',').map(tag => 
-                    `<span class="badge bg-info text-dark me-1">${tag.trim()}</span>`
-                ).join('');
-            } else {
-                document.getElementById('summary-tags').textContent = 'None provided';
-            }
-            
-            // Visibility
-            const visibilityValue = document.querySelector('input[name="visibility"]:checked').value;
-            let visibilityText = '';
-            
-            switch (visibilityValue) {
-                case 'PR':
-                    visibilityText = '<i class="bi bi-lock-fill me-1"></i> Private';
-                    break;
-                case 'TM':
-                    visibilityText = '<i class="bi bi-people-fill me-1"></i> Team Only';
-                    break;
-                case 'PB':
-                    visibilityText = '<i class="bi bi-globe me-1"></i> Public';
-                    break;
-            }
-            
-            document.getElementById('summary-visibility').innerHTML = visibilityText;
-        }
-        
-        // Form submission
-        document.getElementById('document-form').addEventListener('submit', function(e) {
+    });
+    
+    // Set up form submission
+    const form = document.getElementById('document-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
             e.preventDefault();
             
             // Final validation
@@ -995,9 +1072,12 @@
                 return;
             }
             
-            if (!document) {
+            const replaceToggle = document.getElementById('replace-file-toggle');
+            const isEditMode = replaceToggle !== null;
+            
+            if (!isEditMode) {
                 const fileInput = document.getElementById('id_file');
-                if (!fileInput.files || fileInput.files.length === 0) {
+                if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
                     alert('Please select a file to upload.');
                     goToStep(0);
                     return;
@@ -1012,11 +1092,13 @@
             }
             
             // Show loading overlay
-            document.getElementById('loading-overlay').style.display = 'flex';
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) loadingOverlay.style.display = 'flex';
             
             // Submit the form
             this.submit();
         });
-    });
+    }
+});
 </script>
 {% endblock %}

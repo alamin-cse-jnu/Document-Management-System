@@ -68,6 +68,9 @@ class UserRegistrationForm(forms.ModelForm):
         required=False
     )
     
+    phone_number = forms.CharField(max_length=20, required=False)
+    designation = forms.CharField(max_length=100, required=False)
+    
     class Meta:
         model = User
         fields = ['username', 'first_name', 'last_name', 'email', 'password']

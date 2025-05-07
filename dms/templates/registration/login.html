@@ -3,28 +3,161 @@
 
 {% block title %}Login - E-Parliament DMS{% endblock %}
 
+{% block extra_css %}
+<style>
+    .login-container {
+        min-height: 80vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .login-card {
+        max-width: 600px;
+        width: 100%;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+    .login-header {
+        background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+        padding: 2rem;
+        text-align: center;
+        color: white;
+    }
+    .login-header h2 {
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+    .login-logo {
+        width: 80px;
+        height: 80px;
+        background-color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+    .login-logo i {
+        font-size: 2.5rem;
+        color: #0d6efd;
+    }
+    .login-body {
+        padding: 2rem;
+    }
+    .form-floating {
+        margin-bottom: 1.5rem;
+    }
+    .form-floating label {
+        color: #6c757d;
+    }
+    .form-control:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+    .password-container {
+        position: relative;
+    }
+    .password-toggle {
+        position: absolute;
+        top: 50%;
+        right: 1rem;
+        transform: translateY(-50%);
+        cursor: pointer;
+        color: #6c757d;
+        z-index: 10;
+    }
+    .login-footer {
+        text-align: center;
+        padding: 1rem 2rem 2rem;
+    }
+    .login-btn {
+        width: 100%;
+        padding: 0.8rem;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+    }
+    .tagline {
+        font-style: italic;
+        color: rgba(255, 255, 255, 0.9);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row">
-    <div class="col-md-6 offset-md-3">
-        <div class="card">
-            <div class="card-header">
-                <h2>Login</h2>
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="login-logo">
+                <i class="fas fa-file-alt"></i>
             </div>
-            <div class="card-body">
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label for="id_username" class="form-label">Username</label>
-                        <input type="text" name="username" class="form-control" id="id_username" required>
+            <h2>E-Parliament DMS</h2>
+            <p class="tagline mb-0">Streamlining parliamentary document management</p>
+        </div>
+        
+        <div class="login-body">
+            <h4 class="text-center mb-4">Welcome Back</h4>
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="form-floating mb-3">
+                    <input type="text" name="username" class="form-control" id="id_username" placeholder="Username" required>
+                    <label for="id_username">Username</label>
+                </div>
+                
+                <div class="form-floating password-container">
+                    <input type="password" name="password" class="form-control" id="id_password" placeholder="Password" required>
+                    <label for="id_password">Password</label>
+                    <span class="password-toggle" id="password-toggle">
+                        <i class="far fa-eye"></i>
+                    </span>
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center mb-4 mt-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="remember-me">
+                        <label class="form-check-label" for="remember-me">Remember me</label>
                     </div>
-                    <div class="mb-3">
-                        <label for="id_password" class="form-label">Password</label>
-                        <input type="password" name="password" class="form-control" id="id_password" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Login</button>
-                </form>
-            </div>
+                    <a href="#" class="text-decoration-none">Forgot password?</a>
+                </div>
+                
+                <button type="submit" class="btn btn-primary login-btn">
+                    Login <i class="fas fa-sign-in-alt ms-1"></i>
+                </button>
+            </form>
+        </div>
+        
+        <div class="login-footer">
+            <p class="text-muted mb-0">&copy; 2025 software Development Section - IT Branch. All rights reserved.</p>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const passwordToggle = document.getElementById('password-toggle');
+        const passwordInput = document.getElementById('id_password');
+        
+        if (passwordToggle && passwordInput) {
+            passwordToggle.addEventListener('click', function() {
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                
+                // Toggle eye icon
+                const eyeIcon = this.querySelector('i');
+                if (type === 'password') {
+                    eyeIcon.classList.remove('fa-eye-slash');
+                    eyeIcon.classList.add('fa-eye');
+                } else {
+                    eyeIcon.classList.remove('fa-eye');
+                    eyeIcon.classList.add('fa-eye-slash');
+                }
+            });
+        }
+    });
+</script>
 {% endblock %}

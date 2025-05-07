@@ -1,326 +1,143 @@
+<!-- templates/dms/user_form.html -->
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 
 {% block title %}
-    {% if user_obj %}Edit User: {{ user_obj.username }}{% else %}Create New User{% endif %} - E-Parliament DMS
+    {% if user_obj %}Edit User{% else %}Create User{% endif %} - E-Parliament DMS
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    .form-container {
-        max-width: 900px;
-        margin: 0 auto;
+    .password-container {
+        position: relative;
     }
-    .form-card {
-        border: none;
-        border-radius: 12px;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
-    }
-    .form-header {
-        border-top-left-radius: 12px;
-        border-top-right-radius: 12px;
-        border-bottom: none;
-    }
-    .role-selector {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 15px;
-        margin-bottom: 20px;
-    }
-    .role-item {
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        padding: 15px;
+    
+    .password-toggle {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
         cursor: pointer;
-        transition: all 0.2s;
+        color: #6c757d;
     }
-    .role-item:hover {
-        border-color: #007bff;
-        background-color: #f8f9fa;
+    
+    .password-toggle:hover {
+        color: #495057;
     }
-    .role-item.selected {
-        border-color: #007bff;
-        background-color: rgba(0, 123, 255, 0.1);
-    }
-    .role-icon {
-        font-size: 1.5rem;
-        margin-right: 10px;
-        width: 30px;
-        text-align: center;
-    }
-    .team-selector {
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 20px;
-    }
-    .team-item {
-        margin-bottom: 10px;
-    }
-    .team-list {
+    
+    .team-selection {
         max-height: 200px;
         overflow-y: auto;
-    }
-    .form-section {
-        background-color: #f8f9fa;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 20px;
-    }
-    .form-section-title {
-        font-size: 1.25rem;
-        margin-bottom: 15px;
-        display: flex;
-        align-items: center;
-    }
-    .form-section-icon {
-        margin-right: 10px;
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: #007bff;
-        color: white;
-        border-radius: 50%;
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+        padding: 0.5rem;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container py-4 form-container">
-    <div class="card form-card">
-        <div class="card-header bg-primary text-white py-3 form-header">
-            <h4 class="mb-0">
-                {% if user_obj %}
-                    <i class="bi bi-person-gear me-2"></i> Edit User: {{ user_obj.username }}
-                {% else %}
-                    <i class="bi bi-person-plus me-2"></i> Create New User
-                {% endif %}
-            </h4>
-        </div>
-        
-        <div class="card-body p-4">
-            <form method="post" id="user-form">
-                {% csrf_token %}
-                
-                <!-- Account Information Section -->
-                <div class="form-section">
-                    <h5 class="form-section-title">
-                        <span class="form-section-icon"><i class="bi bi-person"></i></span>
-                        Account Information
-                    </h5>
-                    
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">{% if user_obj %}Edit User: {{ user_obj.username }}{% else %}Create New User{% endif %}</h2>
+            </div>
+            <div class="card-body">
+                <form method="post" id="user-form">
+                    {% csrf_token %}
                     <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="id_username" class="form-label">Username <span class="text-danger">*</span></label>
-                                <input type="text" name="username" id="id_username" class="form-control" 
-                                       value="{% if user_obj %}{{ user_obj.username }}{% endif %}" required>
-                            </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_username" class="form-label">Username <span class="text-danger">*</span></label>
+                            <input type="text" name="username" id="id_username" class="form-control" value="{% if user_obj %}{{ user_obj.username }}{% endif %}" required>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="id_email" class="form-label">Email Address</label>
-                                <input type="email" name="email" id="id_email" class="form-control"
-                                       value="{% if user_obj %}{{ user_obj.email }}{% endif %}">
-                            </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_email" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" name="email" id="id_email" class="form-control" value="{% if user_obj %}{{ user_obj.email }}{% endif %}" required>
                         </div>
                     </div>
                     
                     <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="id_first_name" class="form-label">First Name</label>
-                                <input type="text" name="first_name" id="id_first_name" class="form-control"
-                                       value="{% if user_obj %}{{ user_obj.first_name }}{% endif %}">
-                            </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_first_name" class="form-label">First Name</label>
+                            <input type="text" name="first_name" id="id_first_name" class="form-control" value="{% if user_obj %}{{ user_obj.first_name }}{% endif %}">
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="id_last_name" class="form-label">Last Name</label>
-                                <input type="text" name="last_name" id="id_last_name" class="form-control"
-                                       value="{% if user_obj %}{{ user_obj.last_name }}{% endif %}">
-                            </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_last_name" class="form-label">Last Name</label>
+                            <input type="text" name="last_name" id="id_last_name" class="form-control" value="{% if user_obj %}{{ user_obj.last_name }}{% endif %}">
                         </div>
                     </div>
-                </div>
-                
-                <!-- Password Section -->
-                <div class="form-section">
-                    <h5 class="form-section-title">
-                        <span class="form-section-icon"><i class="bi bi-key"></i></span>
-                        Password
-                    </h5>
                     
                     <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="id_password" class="form-label">
-                                    Password {% if user_obj %}(leave blank to keep current){% endif %}
-                                </label>
-                                <input type="password" name="password" id="id_password" class="form-control" 
-                                       {% if not user_obj %}required{% endif %}>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_phone_number" class="form-label">Phone Number</label>
+                            <input type="tel" name="phone_number" id="id_phone_number" class="form-control" value="{% if user_obj %}{{ user_obj.profile.phone_number }}{% endif %}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_designation" class="form-label">Designation</label>
+                            <input type="text" name="designation" id="id_designation" class="form-control" value="{% if user_obj %}{{ user_obj.profile.designation }}{% endif %}">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="id_password" class="form-label">
+                                Password {% if user_obj %}<small class="text-muted">(Leave blank to keep current password)</small>{% endif %}
+                            </label>
+                            <div class="password-container">
+                                <input type="password" name="password" id="id_password" class="form-control" {% if not user_obj %}required{% endif %}>
+                                <span class="password-toggle" id="password-toggle">
+                                    <i class="bi bi-eye"></i>
+                                </span>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="id_confirm_password" class="form-label">
-                                    Confirm Password
-                                </label>
-                                <input type="password" name="confirm_password" id="id_confirm_password" class="form-control" 
-                                       {% if not user_obj %}required{% endif %}>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_confirm_password" class="form-label">Confirm Password</label>
+                            <div class="password-container">
+                                <input type="password" name="confirm_password" id="id_confirm_password" class="form-control" {% if not user_obj %}required{% endif %}>
+                                <span class="password-toggle" id="confirm-password-toggle">
+                                    <i class="bi bi-eye"></i>
+                                </span>
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Role Section -->
-                <div class="form-section">
-                    <h5 class="form-section-title">
-                        <span class="form-section-icon"><i class="bi bi-person-badge"></i></span>
-                        User Role
-                    </h5>
                     
-                    <div class="role-selector">
-                        <div class="role-item {% if user_obj and user_obj.profile.role == 'AD' %}selected{% endif %}" data-role="AD">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon text-danger">
-                                    <i class="bi bi-shield-lock"></i>
-                                </div>
-                                <div>
-                                    <h6 class="mb-1">Admin</h6>
-                                    <p class="text-muted small mb-0">Full system access and management</p>
-                                </div>
-                                <div class="ms-auto">
-                                    <input type="radio" name="role" value="AD" class="form-check-input" 
-                                           {% if user_obj and user_obj.profile.role == 'AD' %}checked{% endif %}>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="role-item {% if user_obj and user_obj.profile.role == 'CO' %}selected{% endif %}" data-role="CO">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon text-primary">
-                                    <i class="bi bi-briefcase"></i>
-                                </div>
-                                <div>
-                                    <h6 class="mb-1">Consultant</h6>
-                                    <p class="text-muted small mb-0">External project consultant</p>
-                                </div>
-                                <div class="ms-auto">
-                                    <input type="radio" name="role" value="CO" class="form-check-input"
-                                           {% if user_obj and user_obj.profile.role == 'CO' %}checked{% endif %}>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="role-item {% if user_obj and user_obj.profile.role == 'OF' %}selected{% endif %}" data-role="OF">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon text-info">
-                                    <i class="bi bi-building"></i>
-                                </div>
-                                <div>
-                                    <h6 class="mb-1">Parliament Official</h6>
-                                    <p class="text-muted small mb-0">Parliament staff member</p>
-                                </div>
-                                <div class="ms-auto">
-                                    <input type="radio" name="role" value="OF" class="form-check-input"
-                                           {% if user_obj and user_obj.profile.role == 'OF' %}checked{% endif %}>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="role-item {% if user_obj and user_obj.profile.role == 'CM' %}selected{% endif %}" data-role="CM">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon text-warning">
-                                    <i class="bi bi-people"></i>
-                                </div>
-                                <div>
-                                    <h6 class="mb-1">Committee Member</h6>
-                                    <p class="text-muted small mb-0">Member of a parliament committee</p>
-                                </div>
-                                <div class="ms-auto">
-                                    <input type="radio" name="role" value="CM" class="form-check-input"
-                                           {% if user_obj and user_obj.profile.role == 'CM' %}checked{% endif %}>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="role-item {% if user_obj and user_obj.profile.role == 'TL' %}selected{% endif %}" data-role="TL">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon text-success">
-                                    <i class="bi bi-person-check"></i>
-                                </div>
-                                <div>
-                                    <h6 class="mb-1">Team Leader</h6>
-                                    <p class="text-muted small mb-0">Team management capabilities</p>
-                                </div>
-                                <div class="ms-auto">
-                                    <input type="radio" name="role" value="TL" class="form-check-input"
-                                           {% if user_obj and user_obj.profile.role == 'TL' %}checked{% endif %}>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="role-item {% if not user_obj or user_obj.profile.role == 'TM' %}selected{% endif %}" data-role="TM">
-                            <div class="d-flex align-items-center">
-                                <div class="role-icon text-secondary">
-                                    <i class="bi bi-person"></i>
-                                </div>
-                                <div>
-                                    <h6 class="mb-1">Team Member</h6>
-                                    <p class="text-muted small mb-0">Regular team member</p>
-                                </div>
-                                <div class="ms-auto">
-                                    <input type="radio" name="role" value="TM" class="form-check-input"
-                                           {% if not user_obj or user_obj.profile.role == 'TM' %}checked{% endif %}>
-                                </div>
-                            </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="id_role" class="form-label">User Role <span class="text-danger">*</span></label>
+                            <select name="role" id="id_role" class="form-select" required>
+                                <option value="">Select a role</option>
+                                {% for role_value, role_name in form.fields.role.choices %}
+                                    <option value="{{ role_value }}" {% if user_obj and user_obj.profile.role == role_value %}selected{% endif %}>{{ role_name }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Team Assignment Section -->
-                <div class="form-section">
-                    <h5 class="form-section-title">
-                        <span class="form-section-icon"><i class="bi bi-people"></i></span>
-                        Team Assignment
-                    </h5>
                     
-                    <div class="team-selector">
-                        <p class="text-muted mb-3">Select the teams this user should be a member of:</p>
-                        
-                        <div class="team-list">
-                            {% for team in form.teams.field.queryset %}
-                                <div class="team-item">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="teams" 
-                                               value="{{ team.id }}" id="team_{{ team.id }}"
-                                               {% if user_obj and team in user_obj.teams.all %}checked{% endif %}>
-                                        <label class="form-check-label" for="team_{{ team.id }}">
-                                            {{ team.name }}
-                                        </label>
-                                    </div>
+                    <div class="mb-4">
+                        <label class="form-label">Assign Teams</label>
+                        <div class="team-selection">
+                            {% for team in form.fields.teams.queryset %}
+                                <div class="form-check mb-2">
+                                    <input type="checkbox" name="teams" value="{{ team.id }}" id="team_{{ team.id }}" class="form-check-input"
+                                        {% if user_obj and team in user_obj.teams.all %}checked{% endif %}>
+                                    <label for="team_{{ team.id }}" class="form-check-label">{{ team.name }}</label>
                                 </div>
                             {% empty %}
-                                <div class="alert alert-info">
-                                    No teams available. <a href="{% url 'dms:team_create' %}">Create a team</a> first.
-                                </div>
+                                <p class="text-muted">No teams available</p>
                             {% endfor %}
                         </div>
                     </div>
-                </div>
-                
-                <div class="d-flex justify-content-between mt-4">
-                    <a href="{% url 'dms:user_list' %}" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-left me-1"></i> Back to Users
-                    </a>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-save me-1"></i> {% if user_obj %}Update{% else %}Create{% endif %} User
-                    </button>
-                </div>
-            </form>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="button" class="btn btn-outline-secondary" onclick="location.href='{% url 'dms:user_list' %}'">
+                            <i class="bi bi-x-lg me-1"></i> Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1"></i> {% if user_obj %}Save Changes{% else %}Create User{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </div>
@@ -329,45 +146,54 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Role selector functionality
-        const roleItems = document.querySelectorAll('.role-item');
-        
-        roleItems.forEach(item => {
-            item.addEventListener('click', function() {
-                // Update radio button
-                const radio = this.querySelector('input[type="radio"]');
-                radio.checked = true;
-                
-                // Update UI
-                roleItems.forEach(i => i.classList.remove('selected'));
-                this.classList.add('selected');
-            });
-        });
-        
-        // Form validation
-        const userForm = document.getElementById('user-form');
+        // Password toggle functionality
+        const passwordToggle = document.getElementById('password-toggle');
+        const confirmPasswordToggle = document.getElementById('confirm-password-toggle');
         const passwordInput = document.getElementById('id_password');
         const confirmPasswordInput = document.getElementById('id_confirm_password');
         
-        userForm.addEventListener('submit', function(e) {
-            // Check if passwords match
-            if (passwordInput.value && passwordInput.value !== confirmPasswordInput.value) {
-                e.preventDefault();
-                alert('Passwords do not match!');
-                confirmPasswordInput.focus();
-                return false;
+        function togglePasswordVisibility(input, icon) {
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.innerHTML = '<i class="bi bi-eye-slash"></i>';
+            } else {
+                input.type = 'password';
+                icon.innerHTML = '<i class="bi bi-eye"></i>';
             }
-            
-            // Check if role is selected
-            const roleSelected = document.querySelector('input[name="role"]:checked');
-            if (!roleSelected) {
-                e.preventDefault();
-                alert('Please select a role for this user!');
-                return false;
-            }
-            
-            return true;
-        });
+        }
+        
+        if (passwordToggle && passwordInput) {
+            passwordToggle.addEventListener('click', function() {
+                togglePasswordVisibility(passwordInput, this);
+            });
+        }
+        
+        if (confirmPasswordToggle && confirmPasswordInput) {
+            confirmPasswordToggle.addEventListener('click', function() {
+                togglePasswordVisibility(confirmPasswordInput, this);
+            });
+        }
+        
+        // Form validation
+        const form = document.getElementById('user-form');
+        
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                const password = passwordInput.value;
+                const confirmPassword = confirmPasswordInput.value;
+                
+                // Only validate passwords if they are provided (for edit mode, passwords might be left blank)
+                if (password || confirmPassword) {
+                    if (password !== confirmPassword) {
+                        e.preventDefault();
+                        alert('Passwords do not match. Please try again.');
+                        return;
+                    }
+                }
+                
+                // Additional validations can be added here if needed
+            });
+        }
     });
 </script>
 {% endblock %}

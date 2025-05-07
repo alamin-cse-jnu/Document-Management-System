@@ -1,4 +1,3 @@
-# dms/templatetags/dms_extras.py
 from django import template
 import os
 

@@ -11,7 +11,7 @@ from django.contrib.auth.views import LoginView
 from .models import Document, Team, Category, Comment, AuditLog, DocumentPermission, UserProfile
 from .forms import DocumentForm, CommentForm, DocumentShareForm, UserRegistrationForm
 from .decorators import role_required
-
+from django.db.models import Count
 
 def create_audit_log(user, action_type, target_object, details=''):
     """Helper function to create audit logs"""
@@ -444,168 +444,86 @@ def user_list(request):
 
 @role_required(['AD'])  # Only admin
 def user_create(request):
-    """Create a new user with profile and team assignments"""
     if request.method == 'POST':
-        # Get form data
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-        confirm_password = request.POST.get('confirm_password')
-        email = request.POST.get('email')
-        first_name = request.POST.get('first_name')
-        last_name = request.POST.get('last_name')
-        role = request.POST.get('role')
-        team_ids = request.POST.getlist('teams')
-        
-        # Validate data
-        if not username:
-            messages.error(request, 'Username is required.')
-            return redirect('dms:user_create')
+        form = UserRegistrationForm(request.POST)
+        if form.is_valid():
+            # Create user
+            user = form.save(commit=False)
+            user.set_password(form.cleaned_data['password'])
+            user.save()
             
-        if not password:
-            messages.error(request, 'Password is required.')
-            return redirect('dms:user_create')
-            
-        if password != confirm_password:
-            messages.error(request, 'Passwords do not match.')
-            return redirect('dms:user_create')
-            
-        if User.objects.filter(username=username).exists():
-            messages.error(request, f'Username "{username}" is already taken.')
-            return redirect('dms:user_create')
-        
-        # Create user
-        try:
-            new_user = User.objects.create_user(
-                username=username,
-                password=password,
-                email=email,
-                first_name=first_name,
-                last_name=last_name
-            )
-            
-            # Set user role
-            profile, created = UserProfile.objects.get_or_create(user=new_user)
-            profile.role = role
+            # Set user role and additional profile fields
+            profile = user.profile
+            profile.role = form.cleaned_data['role']
+            profile.phone_number = form.cleaned_data.get('phone_number', '')
+            profile.designation = form.cleaned_data.get('designation', '')
             profile.save()
             
             # Add user to teams
-            if team_ids:
-                teams = Team.objects.filter(id__in=team_ids)
+            teams = form.cleaned_data.get('teams')
+            if teams:
                 for team in teams:
-                    team.members.add(new_user)
+                    team.members.add(user)
             
-            messages.success(request, f'User "{username}" created successfully.')
+            messages.success(request, f"User '{user.username}' created successfully.")
             return redirect('dms:user_list')
-            
-        except Exception as e:
-            messages.error(request, f'Error creating user: {str(e)}')
-            return redirect('dms:user_create')
+    else:
+        form = UserRegistrationForm()
     
-    # GET request - display form
-    # No "pk" parameter needed here since we're creating a new user
-    form = UserRegistrationForm()  # This is just for the team queryset
-    
-    context = {
-        'form': form,
-    }
-    
-    return render(request, 'dms/user_form.html', context)
+    return render(request, 'dms/user_form.html', {'form': form})
 
 @role_required(['AD'])  # Only admin
 def user_update(request, pk):
-    """Update an existing user"""
     user = get_object_or_404(User, pk=pk)
-    
     if request.method == 'POST':
-        # Get form data
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-        confirm_password = request.POST.get('confirm_password')
-        email = request.POST.get('email')
-        first_name = request.POST.get('first_name')
-        last_name = request.POST.get('last_name')
-        role = request.POST.get('role')
-        team_ids = request.POST.getlist('teams')
-        
-        # Validate data
-        if not username:
-            messages.error(request, 'Username is required.')
-            return redirect('dms:user_update', pk=pk)
+        form = UserRegistrationForm(request.POST, instance=user)
+        if form.is_valid():
+            # Update user
+            user = form.save(commit=False)
             
-        if password and password != confirm_password:
-            messages.error(request, 'Passwords do not match.')
-            return redirect('dms:user_update', pk=pk)
+            # Only set password if it was changed
+            if form.cleaned_data['password']:
+                user.set_password(form.cleaned_data['password'])
             
-        if User.objects.filter(username=username).exclude(pk=pk).exists():
-            messages.error(request, f'Username "{username}" is already taken.')
-            return redirect('dms:user_update', pk=pk)
-        
-        # Update user
-        try:
-            user.username = username
-            user.email = email
-            user.first_name = first_name
-            user.last_name = last_name
-            
-            # Update password if provided
-            if password:
-                user.set_password(password)
-                
             user.save()
             
-            # Update user role
-            profile, created = UserProfile.objects.get_or_create(user=user)
-            profile.role = role
+            # Set user role and additional profile fields
+            profile = user.profile
+            profile.role = form.cleaned_data['role']
+            profile.phone_number = form.cleaned_data.get('phone_number', '')
+            profile.designation = form.cleaned_data.get('designation', '')
             profile.save()
             
-            # Update team assignments
+            # Update teams
             current_teams = user.teams.all()
+            new_teams = form.cleaned_data.get('teams', [])
             
             # Remove from teams not in selection
             for team in current_teams:
-                if str(team.id) not in team_ids:
+                if team not in new_teams:
                     team.members.remove(user)
             
             # Add to new teams
-            if team_ids:
-                for team_id in team_ids:
-                    team = Team.objects.get(id=team_id)
-                    if team not in current_teams:
-                        team.members.add(user)
+            for team in new_teams:
+                if team not in current_teams:
+                    team.members.add(user)
             
-            messages.success(request, f'User "{username}" updated successfully.')
-            
-            # Check if the admin updated their own account
-            if user == request.user and password:
-                messages.info(request, 'You changed your own password. Please log in again.')
-                return redirect('logout')
-                
+            messages.success(request, f"User '{user.username}' updated successfully.")
             return redirect('dms:user_list')
-            
-        except Exception as e:
-            messages.error(request, f'Error updating user: {str(e)}')
-            return redirect('dms:user_update', pk=pk)
+    else:
+        # Pre-populate the form
+        initial_data = {
+            'role': user.profile.role,
+            'teams': user.teams.all(),
+            'phone_number': user.profile.phone_number,
+            'designation': user.profile.designation,
+        }
+        form = UserRegistrationForm(instance=user, initial=initial_data)
+        # Make password fields not required for update
+        form.fields['password'].required = False
+        form.fields['confirm_password'].required = False
     
-    # GET request - display form
-    form = UserRegistrationForm()
-    
-    # Pre-populate the form
-    initial_data = {
-        'role': user.profile.role if hasattr(user, 'profile') else 'TM',
-        'teams': user.teams.all(),
-    }
-    form = UserRegistrationForm(instance=user, initial=initial_data)
-    
-    # Make password fields not required for update
-    form.fields['password'].required = False
-    form.fields['confirm_password'].required = False
-    
-    context = {
-        'form': form,
-        'user_obj': user
-    }
-    
-    return render(request, 'dms/user_form.html', context)
+    return render(request, 'dms/user_form.html', {'form': form, 'user_obj': user})
 
 @role_required(['AD'])  # Only admin
 def user_delete(request, pk):
@@ -665,3 +583,119 @@ class CustomLoginView(LoginView):
     def form_valid(self, form):
         messages.success(self.request, f"Welcome, {form.get_user().username}!")
         return super().form_valid(form)
+
+@login_required
+@role_required(['AD'])  # Only admin
+def admin_reports(request):
+    """Admin dashboard with reports and statistics"""
+    # User statistics
+    total_users = User.objects.count()
+    users_by_role = {}
+    for role_code, role_name in UserProfile.ROLE_CHOICES:
+        users_by_role[role_name] = UserProfile.objects.filter(role=role_code).count()
+    
+    # Team statistics
+    total_teams = Team.objects.count()
+    teams_with_members = Team.objects.annotate(member_count=Count('members')).order_by('-member_count')
+    
+    # Document statistics
+    total_documents = Document.objects.count()
+    recent_documents = Document.objects.order_by('-upload_date')[:10]
+    
+    # Documents by category
+    categories = Category.objects.all()
+    documents_by_category = []
+    
+    for category in categories:
+        doc_count = category.documents.count()
+        if doc_count > 0:  # Only include categories with documents
+            documents_by_category.append({
+                'name': category.name,
+                'count': doc_count,
+                'percentage': (doc_count / total_documents * 100) if total_documents > 0 else 0
+            })
+    
+    # Documents by visibility
+    visibility_counts = {
+        'Private': Document.objects.filter(visibility=Document.VISIBILITY_PRIVATE).count(),
+        'Team': Document.objects.filter(visibility=Document.VISIBILITY_TEAM).count(),
+        'Public': Document.objects.filter(visibility=Document.VISIBILITY_PUBLIC).count()
+    }
+    
+    # Activity statistics
+    recent_activities = AuditLog.objects.order_by('-timestamp')[:20]
+    
+    # Activity count by type
+    activity_counts = {}
+    for action_code, action_name in AuditLog.ACTION_CHOICES:
+        activity_counts[action_name] = AuditLog.objects.filter(action_type=action_code).count()
+    
+    # Most active users
+    most_active_users = AuditLog.objects.values('user__username').annotate(
+        action_count=Count('id')
+    ).order_by('-action_count')[:5]
+    
+    context = {
+        'total_users': total_users,
+        'users_by_role': users_by_role,
+        'total_teams': total_teams,
+        'teams_with_members': teams_with_members,
+        'total_documents': total_documents,
+        'recent_documents': recent_documents,
+        'documents_by_category': documents_by_category,
+        'visibility_counts': visibility_counts,
+        'recent_activities': recent_activities,
+        'activity_counts': activity_counts,
+        'most_active_users': most_active_users,
+    }
+    
+    return render(request, 'dms/admin_reports.html', context)
+
+@login_required
+@role_required(['AD'])  # Only admin
+def export_report(request, report_type):
+    """Export reports in different formats"""
+    import csv
+    from django.http import HttpResponse
+    
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{report_type}_report.csv"'
+    
+    writer = csv.writer(response)
+    
+    if report_type == 'users':
+        # Export user data
+        writer.writerow(['Username', 'Full Name', 'Email', 'Role', 'Teams'])
+        users = User.objects.all()
+        
+        for user in users:
+            try:
+                role = user.profile.get_role_display()
+            except:
+                role = 'N/A'
+                
+            teams = ', '.join([team.name for team in user.teams.all()])
+            writer.writerow([
+                user.username,
+                user.get_full_name(),
+                user.email,
+                role,
+                teams
+            ])
+            
+    elif report_type == 'documents':
+        # Export document data
+        writer.writerow(['Title', 'Owner', 'Categories', 'Visibility', 'Upload Date'])
+        documents = Document.objects.all()
+        
+        for doc in documents:
+            categories = ', '.join([cat.name for cat in doc.categories.all()])
+            writer.writerow([
+                doc.title,
+                doc.owner.username,
+                categories,
+                doc.get_visibility_display(),
+                doc.upload_date.strftime('%Y-%m-%d')
+            ])
+    
+    return response

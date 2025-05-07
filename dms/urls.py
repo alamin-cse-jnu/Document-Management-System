@@ -22,6 +22,8 @@ urlpatterns = [
     path('users/<int:pk>/update/', views.user_update, name='user_update'),
     path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),
     path('users/fix-profiles/', views.fix_user_profiles, name='fix_user_profiles'),
+    path('reports/', views.admin_reports, name='admin_reports'),
+    path('reports/export/<str:report_type>/', views.export_report, name='export_report'),
     
     # Team management
     path('teams/', views.team_management, name='team_management'),
