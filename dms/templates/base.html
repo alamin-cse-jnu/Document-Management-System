@@ -58,6 +58,11 @@
                             <a class="nav-link" href="{% url 'dms:admin_reports' %}"><i class="fas fa-chart-bar me-1"></i>Reports</a>
                         </li>
                         {% endif %}
+                        {% if user.profile.role == 'AD' %}
+                        <a href="{% url 'dms:sync_files' %}" class="btn btn-outline-warning">
+                            <i class="bi bi-arrow-repeat me-1"></i> Sync Files
+                        </a>
+                        {% endif %}
                     {% endif %}
                 </ul>
 

@@ -15,6 +15,9 @@ urlpatterns = [
     path('document/<int:pk>/update/', views.document_update, name='document_update'),
     path('document/<int:pk>/share/', views.document_share, name='document_share'),
     path('document/<int:pk>/download/', views.document_download, name='document_download'),
+    path('document/<int:pk>/delete/', views.document_delete, name='document_delete'),
+    path('admin/sync-files/', views.sync_files, name='sync_files'),
+    path('admin/fix-missing-file/<int:pk>/', views.fix_missing_file, name='fix_missing_file'),
     
     # User management
     path('users/', views.user_list, name='user_list'),
@@ -30,4 +33,5 @@ urlpatterns = [
     path('teams/create/', views.team_create, name='team_create'),
     path('teams/<int:pk>/update/', views.team_update, name='team_update'),
     path('teams/<int:pk>/delete/', views.team_delete, name='team_delete'),
+    path('teams/<int:pk>/', views.team_detail, name='team_detail'),
 ]

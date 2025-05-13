@@ -9,7 +9,11 @@
         <h1>{{ document.title }}</h1>
     </div>
     <div class="col-md-4 text-end">
-        <a href="{% url 'dms:document_download' document.id %}" class="btn btn-primary">Download</a>
+        {% if file_exists %}
+            <a href="{% url 'dms:document_download' document.id %}" class="btn btn-primary">Download</a>
+        {% else %}
+            <button class="btn btn-primary" disabled title="File is missing">Download</button>
+        {% endif %}
         {% if can_edit %}
             <a href="{% url 'dms:document_update' document.id %}" class="btn btn-outline-primary">Edit</a>
         {% endif %}
@@ -59,6 +63,14 @@
                     <div class="alert alert-info mt-4">
                         Preview not available for this file type. Please download the file to view its contents.
                     </div>
+                {% endif %}
+
+                {% if not file_exists %}
+                <div class="alert alert-danger mt-3">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Warning:</strong> The file for this document is missing from the server. 
+                    The download function will not work. Please contact an administrator.
+                </div>
                 {% endif %}
             </div>
         </div>

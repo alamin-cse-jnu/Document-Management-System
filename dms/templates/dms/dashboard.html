@@ -49,8 +49,12 @@
                     <div class="list-group">
                         {% for team in teams %}
                             <div class="list-group-item">
-                                <h6>{{ team.name }}</h6>
-                                <small>{{ team.members.count }} members</small>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <a href="{% url 'dms:team_detail' team.id %}" class="text-decoration-none">
+                                        <h6 class="mb-0">{{ team.name }}</h6>
+                                    </a>
+                                    <small class="badge bg-primary rounded-pill">{{ team.members.count }} members</small>
+                                </div>
                             </div>
                         {% empty %}
                             <div class="list-group-item">You are not a member of any team.</div>

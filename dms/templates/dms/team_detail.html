@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+{% block title %}{{ team.name }} - Team Details - E-Parliament DMS{% endblock %}
+
+{% block extra_css %}
+<style>
+    .team-header {
+        background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+    .member-card {
+        transition: all 0.2s;
+        height: 100%;
+    }
+    .member-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+    }
+    .role-badge {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .admin-badge {
+        background-color: #dc3545;
+        color: white;
+    }
+    .consultant-badge {
+        background-color: #6f42c1;
+        color: white;
+    }
+    .official-badge {
+        background-color: #0d6efd;
+        color: white;
+    }
+    .committee-badge {
+        background-color: #fd7e14;
+        color: white;
+    }
+    .team-leader-badge {
+        background-color: #198754;
+        color: white;
+    }
+    .team-member-badge {
+        background-color: #6c757d;
+        color: white;
+    }
+    .document-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        height: 100%;
+    }
+    .document-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .tab-content {
+        padding-top: 1.5rem;
+    }
+    .team-stats {
+        background-color: rgba(255,255,255,0.2);
+        border-radius: 10px;
+        padding: 0.5rem 1rem;
+        margin-top: 1rem;
+        display: inline-block;
+    }
+    .back-button {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        z-index: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Team Header -->
+    <div class="team-header position-relative mb-4 shadow">
+        <a href="{% url 'dms:dashboard' %}" class="btn btn-sm btn-light rounded-circle back-button">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="display-5 fw-bold">{{ team.name }}</h1>
+                <p class="lead mb-0">Team created on {{ team.created_at|date:"F d, Y" }}</p>
+                <div class="team-stats">
+                    <div class="d-flex gap-4">
+                        <div>
+                            <i class="bi bi-people-fill me-2"></i>
+                            <span>{{ team_members.count }} members</span>
+                        </div>
+                        <div>
+                            <i class="bi bi-file-earmark-text me-2"></i>
+                            <span>{{ team_documents.count }} shared documents</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                {% if is_team_leader or is_admin %}
+                    <a href="{% url 'dms:team_update' team.id %}" class="btn btn-light">
+                        <i class="bi bi-pencil-square me-1"></i> Edit Team
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <ul class="nav nav-tabs" id="teamTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="members-tab" data-bs-toggle="tab" data-bs-target="#members" type="button" role="tab" aria-controls="members" aria-selected="true">
+                <i class="bi bi-people me-1"></i> Team Members
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="documents-tab" data-bs-toggle="tab" data-bs-target="#documents" type="button" role="tab" aria-controls="documents" aria-selected="false">
+                <i class="bi bi-file-earmark me-1"></i> Shared Documents
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="teamTabsContent">
+        <!-- Members Tab -->
+        <div class="tab-pane fade show active" id="members" role="tabpanel" aria-labelledby="members-tab">
+            <div class="row">
+                {% for member in team_members %}
+                    <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
+                        <div class="card member-card h-100 border-0 shadow-sm">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center py-3">
+                                <h5 class="mb-0">{{ member.username }}</h5>
+                                <div>
+                                    {% if member.profile %}
+                                        {% with role=member.profile.role %}
+                                            {% if role == 'AD' %}
+                                                <span class="badge role-badge admin-badge">Admin</span>
+                                            {% elif role == 'CO' %}
+                                                <span class="badge role-badge consultant-badge">Consultant</span>
+                                            {% elif role == 'OF' %}
+                                                <span class="badge role-badge official-badge">Official</span>
+                                            {% elif role == 'CM' %}
+                                                <span class="badge role-badge committee-badge">Committee</span>
+                                            {% elif role == 'TL' %}
+                                                <span class="badge role-badge team-leader-badge">Team Leader</span>
+                                            {% elif role == 'TM' %}
+                                                <span class="badge role-badge team-member-badge">Team Member</span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% else %}
+                                        <span class="badge bg-danger">No Profile</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <p class="mb-1"><strong>Full Name:</strong></p>
+                                    <p>{{ member.get_full_name|default:"Not provided" }}</p>
+                                </div>
+                                <div class="mb-3">
+                                    <p class="mb-1"><strong>Email:</strong></p>
+                                    <p>{{ member.email|default:"Not provided" }}</p>
+                                </div>
+                                {% if member.profile.designation %}
+                                <div class="mb-3">
+                                    <p class="mb-1"><strong>Designation:</strong></p>
+                                    <p>{{ member.profile.designation }}</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i> No team members found.
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Documents Tab -->
+        <div class="tab-pane fade" id="documents" role="tabpanel" aria-labelledby="documents-tab">
+            {% if team_documents %}
+                <div class="row">
+                    {% for document in team_documents %}
+                        <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
+                            <div class="card document-card border-0 shadow-sm h-100">
+                                <div class="card-body d-flex flex-column">
+                                    <!-- Document icon based on file type -->
+                                    <div class="text-center mb-3">
+                                        {% if document.file.name|lower|slice:"-4:" == ".pdf" %}
+                                            <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 2rem;"></i>
+                                        {% elif document.file.name|lower|slice:"-4:" == ".doc" or document.file.name|lower|slice:"-5:" == ".docx" %}
+                                            <i class="bi bi-file-earmark-word text-primary" style="font-size: 2rem;"></i>
+                                        {% elif document.file.name|lower|slice:"-4:" == ".xls" or document.file.name|lower|slice:"-5:" == ".xlsx" %}
+                                            <i class="bi bi-file-earmark-excel text-success" style="font-size: 2rem;"></i>
+                                        {% elif document.file.name|lower|slice:"-4:" == ".ppt" or document.file.name|lower|slice:"-5:" == ".pptx" %}
+                                            <i class="bi bi-file-earmark-ppt text-warning" style="font-size: 2rem;"></i>
+                                        {% else %}
+                                            <i class="bi bi-file-earmark text-secondary" style="font-size: 2rem;"></i>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <h5 class="card-title text-truncate">{{ document.title }}</h5>
+                                    
+                                    <div class="mb-2 small text-secondary">
+                                        <span title="Version"><i class="bi bi-layers me-1"></i>v{{ document.version }}</span>
+                                        <span class="ms-2" title="Upload date"><i class="bi bi-calendar-date me-1"></i>{{ document.upload_date|date:"M d, Y" }}</span>
+                                    </div>
+                                    
+                                    {% if document.description %}
+                                    <p class="card-text text-muted small mb-3">{{ document.description|truncatechars:80 }}</p>
+                                    {% endif %}
+                                    
+                                    <!-- Categories -->
+                                    <div class="mt-auto mb-2">
+                                        {% for category in document.categories.all %}
+                                            <span class="badge bg-light text-dark border">{{ category.name|truncatechars:15 }}</span>
+                                        {% endfor %}
+                                    </div>
+                                    
+                                    <!-- Owner -->
+                                    <div class="d-flex align-items-center mb-3">
+                                        <div class="bg-light rounded-circle p-1 me-2">
+                                            <i class="bi bi-person"></i>
+                                        </div>
+                                        <small class="text-muted">{{ document.owner.username }}</small>
+                                    </div>
+                                    
+                                    <!-- Actions -->
+                                    <div class="d-flex justify-content-between mt-auto">
+                                        <a href="{% url 'dms:document_detail' document.id %}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye me-1"></i> View
+                                        </a>
+                                        <a href="{% url 'dms:document_download' document.id %}" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-download me-1"></i> Download
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i> No documents have been shared with this team yet.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

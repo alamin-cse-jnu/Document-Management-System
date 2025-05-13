@@ -253,9 +253,16 @@
                                     <a href="{% url 'dms:document_detail' document.id %}" class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-eye me-1"></i> View
                                     </a>
-                                    <a href="{% url 'dms:document_download' document.id %}" class="btn btn-sm btn-primary">
-                                        <i class="bi bi-download me-1"></i> Download
-                                    </a>
+                                    <div>
+                                        <a href="{% url 'dms:document_download' document.id %}" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-download me-1"></i> Download
+                                        </a>
+                                        {% if user.profile.role == 'AD' %}
+                                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteDocumentModal{{ document.id }}">
+                                                <i class="bi bi-trash me-1"></i>
+                                            </button>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -310,9 +317,38 @@
                                                 <a href="{% url 'dms:document_download' document.id %}" class="btn btn-sm btn-primary">
                                                     <i class="bi bi-download"></i>
                                                 </a>
+                                                {% if user.profile.role == 'AD' %}
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteDocumentModal{{ document.id }}">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                {% endif %}
                                             </div>
                                         </td>
                                     </tr>
+                                    {% endfor %}
+                                    <!-- Document Delete Modals -->
+                                    {% for document in page_obj %}
+                                        <div class="modal fade" id="deleteDocumentModal{{ document.id }}" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog modal-dialog-centered">
+                                                <div class="modal-content">
+                                                    <div class="modal-header bg-danger text-white">
+                                                        <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Delete</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <p>Are you sure you want to delete document <strong>{{ document.title }}</strong>?</p>
+                                                        <p class="text-danger small">This action cannot be undone and will permanently delete the document file and all associated permissions and comments.</p>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                        <form method="post" action="{% url 'dms:document_delete' document.id %}">
+                                                            {% csrf_token %}
+                                                            <button type="submit" class="btn btn-danger">Delete Document</button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     {% endfor %}
                                 </tbody>
                             </table>

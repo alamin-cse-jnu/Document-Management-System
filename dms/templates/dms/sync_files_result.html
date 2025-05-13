@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block title %}Sync Results - E-Parliament DMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card border-0 shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="bi bi-check2-circle me-2"></i>Sync Results</h4>
+                </div>
+                <div class="card-body">
+                    <!-- Missing Files Section -->
+                    <h5 class="mb-3"><i class="bi bi-exclamation-triangle me-2"></i>Documents with Missing Files</h5>
+                    
+                    {% if missing_files %}
+                        <div class="table-responsive mb-4">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Document ID</th>
+                                        <th>Title</th>
+                                        <th>Owner</th>
+                                        <th>File Path</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for document in missing_files %}
+                                        <tr>
+                                            <td>{{ document.id }}</td>
+                                            <td>
+                                                <a href="{% url 'dms:document_detail' document.id %}">{{ document.title }}</a>
+                                            </td>
+                                            <td>{{ document.owner.username }}</td>
+                                            <td><small class="text-danger">{{ document.file.name }}</small></td>
+                                            <td>
+                                                <div class="d-flex gap-1">
+                                                    <a href="{% url 'dms:document_update' document.id %}" class="btn btn-sm btn-outline-primary" title="Edit document details">
+                                                        <i class="bi bi-pencil"></i> Edit
+                                                    </a>
+                                                    <a href="{% url 'dms:fix_missing_file' document.id %}" class="btn btn-sm btn-warning" title="Upload replacement file">
+                                                        <i class="bi bi-upload"></i> Fix
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-success mb-4">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            No documents with missing files found.
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Orphaned Files Section -->
+                    <h5 class="mb-3"><i class="bi bi-question-circle me-2"></i>Orphaned Files</h5>
+                    
+                    {% if orphaned_files %}
+                        <div class="alert alert-warning mb-2">
+                            <i class="bi bi-info-circle-fill me-2"></i>
+                            The following files exist on the server but are not linked to any document in the database.
+                        </div>
+                        
+                        <div class="table-responsive mb-4">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Filename</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for filename in orphaned_files %}
+                                        <tr>
+                                            <td>{{ filename }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-success mb-4">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            No orphaned files found.
+                        </div>
+                    {% endif %}
+                    
+                    <div class="d-flex gap-2 mt-4">
+                        <a href="{% url 'dms:sync_files' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-repeat me-1"></i> Run Sync Again
+                        </a>
+                        <a href="{% url 'dms:dashboard' %}" class="btn btn-primary">
+                            <i class="bi bi-house me-1"></i> Return to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

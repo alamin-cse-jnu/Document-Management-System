@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Sync Files - E-Parliament DMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card border-0 shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i>Sync Files</h4>
+                </div>
+                <div class="card-body">
+                    <p class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        This tool will check for inconsistencies between the database records and the actual files on the server.
+                    </p>
+                    
+                    <p>The sync process will:</p>
+                    <ul>
+                        <li>Find documents in the database with missing files</li>
+                        <li>Find orphaned files that exist on the server but are not linked to any document in the database</li>
+                    </ul>
+                    
+                    <p class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        This process may take some time depending on the number of documents in the system.
+                    </p>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-arrow-repeat me-2"></i>Start Sync Process
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

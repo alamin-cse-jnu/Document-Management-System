@@ -12,6 +12,8 @@ from .models import Document, Team, Category, Comment, AuditLog, DocumentPermiss
 from .forms import DocumentForm, CommentForm, DocumentShareForm, UserRegistrationForm
 from .decorators import role_required
 from django.db.models import Count
+import os
+from django.conf import settings
 
 def create_audit_log(user, action_type, target_object, details=''):
     """Helper function to create audit logs"""
@@ -104,6 +106,26 @@ def document_list(request):
     return render(request, 'dms/document_list.html', context)
 
 @login_required
+def document_create(request):
+    if request.method == 'POST':
+        form = DocumentForm(request.POST, request.FILES)
+        if form.is_valid():
+            document = form.save(commit=False)
+            document.owner = request.user
+            document.save()
+            
+            # Save categories
+            form.save_m2m()
+            
+            create_audit_log(request.user, AuditLog.ACTION_UPLOAD, f"Document: {document.id}")
+            messages.success(request, "Document uploaded successfully!")
+            return redirect('dms:document_detail', pk=document.id)
+    else:
+        form = DocumentForm()
+    
+    return render(request, 'dms/document_form.html', {'form': form})
+
+@login_required
 def document_detail(request, pk):
     document = get_object_or_404(Document, pk=pk)
     user = request.user
@@ -121,6 +143,9 @@ def document_detail(request, pk):
     if not has_access:
         messages.error(request, "You don't have permission to access this document.")
         return redirect('dms:document_list')
+    
+    # Check if file exists
+    file_exists = document.file and os.path.exists(document.file.path)
     
     # Log view event
     create_audit_log(user, AuditLog.ACTION_VIEW, f"Document: {document.id}")
@@ -178,29 +203,10 @@ def document_detail(request, pk):
         'can_comment': permission_level in ['owner', DocumentPermission.PERMISSION_WRITE, 
                                           DocumentPermission.PERMISSION_COMMENT],
         'can_share': permission_level in ['owner', DocumentPermission.PERMISSION_SHARE],
+        'file_exists': file_exists,
     }
     
     return render(request, 'dms/document_detail.html', context)
-
-@login_required
-def document_create(request):
-    if request.method == 'POST':
-        form = DocumentForm(request.POST, request.FILES)
-        if form.is_valid():
-            document = form.save(commit=False)
-            document.owner = request.user
-            document.save()
-            
-            # Save categories
-            form.save_m2m()
-            
-            create_audit_log(request.user, AuditLog.ACTION_UPLOAD, f"Document: {document.id}")
-            messages.success(request, "Document uploaded successfully!")
-            return redirect('dms:document_detail', pk=document.id)
-    else:
-        form = DocumentForm()
-    
-    return render(request, 'dms/document_form.html', {'form': form})
 
 @login_required
 def document_update(request, pk):
@@ -316,10 +322,107 @@ def document_download(request, pk):
     # Log download event
     create_audit_log(user, AuditLog.ACTION_DOWNLOAD, f"Document: {document.id}")
     
+    # Check if the file exists in the file system
+    file_path = document.file.path if document.file else None
+    
+    if not file_path or not os.path.exists(file_path):
+        messages.error(request, f"The file for document '{document.title}' is missing from the server. Please contact an administrator.")
+        return redirect('dms:document_detail', pk=document.id)
+    
     # Serve the file
-    response = HttpResponse(document.file, content_type='application/octet-stream')
-    response['Content-Disposition'] = f'attachment; filename="{document.file.name.split("/")[-1]}"'
-    return response
+    try:
+        with open(file_path, 'rb') as file:
+            response = HttpResponse(file.read(), content_type='application/octet-stream')
+            response['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
+            return response
+    except Exception as e:
+        messages.error(request, f"Error downloading file: {str(e)}")
+        return redirect('dms:document_detail', pk=document.id)
+
+@login_required
+@role_required(['AD'])  # Only admin
+def document_delete(request, pk):
+    """Delete document with confirmation"""
+    document = get_object_or_404(Document, pk=pk)
+    
+    if request.method == 'POST':
+        document_title = document.title
+        
+        # Log delete event before deleting the document
+        create_audit_log(request.user, AuditLog.ACTION_DELETE, f"Document: {document.id} - {document_title}")
+        
+        try:
+            # Delete document file from storage
+            if document.file:
+                if os.path.isfile(document.file.path):
+                    os.remove(document.file.path)
+            
+            # Delete document record
+            document.delete()
+            messages.success(request, f"Document '{document_title}' deleted successfully.")
+        except Exception as e:
+            messages.error(request, f"Error deleting document: {str(e)}")
+    
+    return redirect('dms:document_list')
+
+@login_required
+@role_required(['AD'])  # Only admin
+def sync_files(request):
+    """Sync files in the database with the file system"""
+    if request.method == 'POST':
+        # Get all documents
+        documents = Document.objects.all()
+        missing_files = []
+        orphaned_files = []
+        
+        # Check for missing files in the database
+        for document in documents:
+            if document.file and not os.path.exists(document.file.path):
+                missing_files.append(document)
+        
+        # Check for orphaned files in the file system
+        uploads_dir = os.path.join(settings.MEDIA_ROOT, 'uploads/documents')
+        if os.path.exists(uploads_dir):
+            db_files = set([os.path.basename(doc.file.name) for doc in documents if doc.file])
+            
+            for filename in os.listdir(uploads_dir):
+                if filename not in db_files and os.path.isfile(os.path.join(uploads_dir, filename)):
+                    orphaned_files.append(filename)
+        
+        context = {
+            'missing_files': missing_files,
+            'orphaned_files': orphaned_files,
+        }
+        
+        return render(request, 'dms/sync_files_result.html', context)
+    
+    return render(request, 'dms/sync_files.html')
+
+@login_required
+@role_required(['AD'])  # Only admin
+def fix_missing_file(request, pk):
+    """Allow admin to upload a replacement file for a document with a missing file"""
+    document = get_object_or_404(Document, pk=pk)
+    
+    if request.method == 'POST':
+        if 'file' in request.FILES:
+            # Delete old file record if it exists but the file is missing
+            if document.file and not os.path.exists(document.file.path):
+                # Just update the file field, don't try to delete the non-existent file
+                document.file = request.FILES['file']
+                document.save()
+                messages.success(request, f"File for document '{document.title}' has been replaced.")
+                return redirect('dms:document_detail', pk=pk)
+            else:
+                messages.error(request, "This document's file exists or is not set. Use the regular edit function.")
+        else:
+            messages.error(request, "No file was uploaded.")
+    
+    context = {
+        'document': document,
+    }
+    
+    return render(request, 'dms/fix_missing_file.html', context)
 
 @role_required(['AD', 'TL'])  # Admin or team leader
 def team_management(request):
@@ -410,14 +513,57 @@ def team_update(request, pk):
     
     return redirect('dms:team_management')
 
+@login_required
+def team_detail(request, pk):
+    """View team details and member list"""
+    team = get_object_or_404(Team, pk=pk)
+    user = request.user
+    
+    # Check if user is a member of the team or an admin
+    is_member = user in team.members.all()
+    is_admin = user.profile.role == UserProfile.ROLE_ADMIN
+    is_team_leader = user.profile.role == UserProfile.ROLE_TEAM_LEADER and is_member
+    
+    if not (is_member or is_admin):
+        messages.error(request, "You don't have permission to view this team's details.")
+        return redirect('dms:dashboard')
+    
+    # Get team members with their profile information
+    team_members = team.members.all().select_related('profile')
+    
+    # Get documents shared with this team
+    team_documents = Document.objects.filter(
+        Q(permissions__team=team) |  # Documents explicitly shared with the team
+        Q(owner__in=team_members, visibility=Document.VISIBILITY_TEAM)  # Team-visible documents owned by team members
+    ).distinct().order_by('-upload_date')
+    
+    context = {
+        'team': team,
+        'team_members': team_members,
+        'team_documents': team_documents,
+        'is_team_leader': is_team_leader,
+        'is_admin': is_admin,
+    }
+    
+    return render(request, 'dms/team_detail.html', context)
+
+@login_required
 @role_required(['AD'])  # Only admin
 def team_delete(request, pk):
     team = get_object_or_404(Team, pk=pk)
     
     if request.method == 'POST':
         team_name = team.name
-        team.delete()
-        messages.success(request, f"Team '{team_name}' deleted successfully.")
+        
+        try:
+            # Log the action before deleting
+            create_audit_log(request.user, 'DL', f"Team: {team.id} - {team_name}")
+            
+            # Delete the team
+            team.delete()
+            messages.success(request, f"Team '{team_name}' deleted successfully.")
+        except Exception as e:
+            messages.error(request, f"Error deleting team: {str(e)}")
     
     return redirect('dms:team_management')
 
