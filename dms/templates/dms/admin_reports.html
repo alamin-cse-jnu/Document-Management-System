@@ -15,9 +15,6 @@
         font-size: 2.5rem;
         opacity: 0.7;
     }
-    .chart-container {
-        height: 300px;
-    }
     .report-section {
         margin-bottom: 2rem;
     }
@@ -26,29 +23,44 @@
         border-radius: 10px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     }
-    .document-category-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-    }
-    .category-bar {
-        height: 10px;
-        border-radius: 5px;
-        background-color: #f8f9fa;
-    }
-    .category-bar-fill {
-        height: 100%;
-        border-radius: 5px;
-        background-color: var(--bs-primary);
-    }
-    .table-users th, .table-users td {
-        padding: 12px 15px;
-    }
     .header-with-actions {
         display: flex;
         justify-content: space-between;
         align-items: center;
+    }
+    .table-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    .column-selector {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .export-dropdown .dropdown-menu {
+        min-width: 200px;
+    }
+    .tab-content > .tab-pane {
+        padding: 20px 0;
+    }
+    .nav-tabs .nav-link {
+        border-radius: 8px 8px 0 0;
+        font-weight: 500;
+    }
+    .nav-tabs .nav-link.active {
+        background-color: #f8f9fa;
+        border-color: #dee2e6 #dee2e6 #f8f9fa;
+    }
+    .report-heading {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .report-heading i {
+        font-size: 1.5rem;
+        margin-right: 0.5rem;
+        opacity: 0.7;
     }
 </style>
 {% endblock %}
@@ -60,14 +72,8 @@
         <p class="text-muted">Comprehensive overview of system usage and statistics</p>
     </div>
     <div>
-        <a href="{% url 'dms:sync_files' %}" class="btn btn-outline-primary">
-            <i class="bi bi-arrow-repeat me-1"></i> File System Sync
-        </a>
         <button id="print-report" class="btn btn-outline-primary">
             <i class="bi bi-printer me-1"></i> Print Report
-        </button>
-        <button id="export-report" class="btn btn-success">
-            <i class="bi bi-download me-1"></i> Export Data
         </button>
     </div>
 </div>
@@ -136,177 +142,436 @@
     </div>
 </div>
 
-<div class="row">
-    <!-- Left Column - User & Team Stats -->
-    <div class="col-md-6">
-        <!-- User Distribution -->
-        <div class="report-section">
-            <div class="card report-card">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="bi bi-people me-2"></i>User Distribution by Role</h5>
+<!-- Main Reports Area -->
+<div class="card report-card">
+    <div class="card-header bg-white p-0">
+        <ul class="nav nav-tabs" id="reportsTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-pane" type="button" role="tab" aria-controls="users-pane" aria-selected="true">
+                    <i class="bi bi-people me-1"></i> User Report
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="teams-tab" data-bs-toggle="tab" data-bs-target="#teams-pane" type="button" role="tab" aria-controls="teams-pane" aria-selected="false">
+                    <i class="bi bi-people-fill me-1"></i> Team List
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="documents-tab" data-bs-toggle="tab" data-bs-target="#documents-pane" type="button" role="tab" aria-controls="documents-pane" aria-selected="false">
+                    <i class="bi bi-file-earmark-text me-1"></i> Document List
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats-pane" type="button" role="tab" aria-controls="stats-pane" aria-selected="false">
+                    <i class="bi bi-graph-up me-1"></i> Statistics
+                </button>
+            </li>
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content" id="reportsTabContent">
+            <!-- 1. User Report Tab -->
+            <div class="tab-pane fade show active" id="users-pane" role="tabpanel" aria-labelledby="users-tab">
+                <div class="report-heading">
+                    <i class="bi bi-people"></i>
+                    <h4 class="mb-0">User Report</h4>
                 </div>
-                <div class="card-body">
-                    <div class="chart-container" id="user-role-chart"></div>
+                
+                <div class="table-controls">
+                    <div class="input-group" style="max-width: 300px;">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" id="userSearchInput" class="form-control" placeholder="Search users...">
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <div class="dropdown column-selector-dropdown">
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="userColumnSelector" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-columns-gap me-1"></i> Columns
+                            </button>
+                            <div class="dropdown-menu column-selector p-2" aria-labelledby="userColumnSelector">
+                                <div class="form-check">
+                                    <input class="form-check-input user-column-toggle" type="checkbox" id="userCol0" checked disabled>
+                                    <label class="form-check-label" for="userCol0">Serial</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input user-column-toggle" type="checkbox" id="userCol1" checked>
+                                    <label class="form-check-label" for="userCol1">ID</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input user-column-toggle" type="checkbox" id="userCol2" checked>
+                                    <label class="form-check-label" for="userCol2">Name</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input user-column-toggle" type="checkbox" id="userCol3" checked>
+                                    <label class="form-check-label" for="userCol3">Designation</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input user-column-toggle" type="checkbox" id="userCol4" checked>
+                                    <label class="form-check-label" for="userCol4">Phone</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input user-column-toggle" type="checkbox" id="userCol5" checked>
+                                    <label class="form-check-label" for="userCol5">Email</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input user-column-toggle" type="checkbox" id="userCol6" checked>
+                                    <label class="form-check-label" for="userCol6">Team</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input user-column-toggle" type="checkbox" id="userCol7" checked>
+                                    <label class="form-check-label" for="userCol7">Role</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="dropdown export-dropdown">
+                            <button class="btn btn-success dropdown-toggle" type="button" id="userExportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-download me-1"></i> Export
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="userExportDropdown">
+                                <li><h6 class="dropdown-header">Export Options</h6></li>
+                                <li><a class="dropdown-item" href="#" id="exportUsersPDF"><i class="bi bi-file-pdf me-2"></i>Export as PDF</a></li>
+                                <li><a class="dropdown-item" href="#" id="exportUsersExcel"><i class="bi bi-file-excel me-2"></i>Export as Excel</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="#" id="exportUsersSelectedPDF"><i class="bi bi-check-square me-2"></i>Export Selected (PDF)</a></li>
+                                <li><a class="dropdown-item" href="#" id="exportUsersSelectedExcel"><i class="bi bi-check-square me-2"></i>Export Selected (Excel)</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped" id="userReportTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th data-column="serial">Serial</th>
+                                <th data-column="id">ID</th>
+                                <th data-column="name">Name</th>
+                                <th data-column="designation">Designation</th>
+                                <th data-column="phone">Phone</th>
+                                <th data-column="email">Email</th>
+                                <th data-column="team">Team</th>
+                                <th data-column="role">Role</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in all_users %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>{{ user.id }}</td>
+                                    <td>{{ user.get_full_name|default:user.username }}</td>
+                                    <td>{{ user.profile.designation|default:"-" }}</td>
+                                    <td>{{ user.profile.phone_number|default:"-" }}</td>
+                                    <td>{{ user.email|default:"-" }}</td>
+                                    <td>
+                                        {% for team in user.teams.all %}
+                                            <span class="badge bg-light text-dark border me-1">{{ team.name }}</span>
+                                        {% empty %}
+                                            -
+                                        {% endfor %}
+                                    </td>
+                                    <td>{{ user.profile.get_role_display }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center">No users found</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
-        </div>
-        
-        <!-- Most Active Teams -->
-        <div class="report-section">
-            <div class="card report-card">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="bi bi-people-fill me-2"></i>Teams by Member Count</h5>
+            
+            <!-- 2. Team List Tab -->
+            <div class="tab-pane fade" id="teams-pane" role="tabpanel" aria-labelledby="teams-tab">
+                <div class="report-heading">
+                    <i class="bi bi-people-fill"></i>
+                    <h4 class="mb-0">Team List</h4>
                 </div>
-                <div class="card-body">
-                    <table class="table table-hover">
-                        <thead>
+                
+                <div class="table-controls">
+                    <div class="input-group" style="max-width: 300px;">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" id="teamSearchInput" class="form-control" placeholder="Search teams...">
+                    </div>
+                    
+                    <div class="dropdown export-dropdown">
+                        <button class="btn btn-success dropdown-toggle" type="button" id="teamExportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-download me-1"></i> Export
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="teamExportDropdown">
+                            <li><a class="dropdown-item" href="#" id="exportTeamsPDF"><i class="bi bi-file-pdf me-2"></i>Export as PDF</a></li>
+                            <li><a class="dropdown-item" href="#" id="exportTeamsExcel"><i class="bi bi-file-excel me-2"></i>Export as Excel</a></li>
+                            <li><a class="dropdown-item" href="{% url 'dms:export_report' 'users' %}"><i class="bi bi-download me-2"></i>Server-side CSV Export</a></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped" id="teamReportTable">
+                        <thead class="table-light">
                             <tr>
+                                <th>Serial</th>
                                 <th>Team Name</th>
-                                <th class="text-center">Members</th>
+                                <th>Team Members</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for team in teams_with_members %}
                                 <tr>
+                                    <td>{{ forloop.counter }}</td>
                                     <td>{{ team.name }}</td>
-                                    <td class="text-center">
-                                        <span class="badge bg-primary rounded-pill">{{ team.member_count }}</span>
-                                    </td>
-                                </tr>
-                            {% empty %}
-                                <tr>
-                                    <td colspan="2" class="text-center text-muted">No teams found</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Most Active Users -->
-        <div class="report-section">
-            <div class="card report-card">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="bi bi-person-badge me-2"></i>Most Active Users</h5>
-                </div>
-                <div class="card-body">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Username</th>
-                                <th class="text-end">Activities</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for user in most_active_users %}
-                                <tr>
-                                    <td>{{ user.user__username }}</td>
-                                    <td class="text-end">{{ user.action_count }}</td>
-                                </tr>
-                            {% empty %}
-                                <tr>
-                                    <td colspan="2" class="text-center text-muted">No activity data found</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Right Column - Document Stats -->
-    <div class="col-md-6">
-        <!-- Document Visibility -->
-        <div class="report-section">
-            <div class="card report-card">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="bi bi-eye me-2"></i>Document Visibility Distribution</h5>
-                </div>
-                <div class="card-body">
-                    <div class="chart-container" id="document-visibility-chart"></div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Document by Category -->
-        <div class="report-section">
-            <div class="card report-card">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="bi bi-folder2 me-2"></i>Documents by Category</h5>
-                </div>
-                <div class="card-body">
-                    {% for category in documents_by_category %}
-                        <div class="document-category-item">
-                            <div class="category-name">{{ category.name }}</div>
-                            <div class="category-count">{{ category.count }}</div>
-                        </div>
-                        <div class="category-bar mb-3">
-                            <div class="category-bar-fill" style="width: {{ category.percentage }}%"></div>
-                        </div>
-                    {% empty %}
-                        <p class="text-center text-muted">No documents found</p>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-        
-        <!-- Recent Activity -->
-        <div class="report-section">
-            <div class="card report-card">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0"><i class="bi bi-activity me-2"></i>Activity by Type</h5>
-                </div>
-                <div class="card-body">
-                    <div class="chart-container" id="activity-type-chart"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Recent Documents Table -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card report-card">
-            <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Recent Documents</h5>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped table-users mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Title</th>
-                                <th>Owner</th>
-                                <th>Categories</th>
-                                <th>Visibility</th>
-                                <th>Upload Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for document in recent_documents %}
-                                <tr>
                                     <td>
-                                        <a href="{% url 'dms:document_detail' document.id %}">{{ document.title }}</a>
-                                    </td>
-                                    <td>{{ document.owner.username }}</td>
-                                    <td>
-                                        {% for category in document.categories.all %}
-                                            <span class="badge bg-secondary">{{ category.name }}</span>
+                                        {% for member in team.members.all %}
+                                            <span class="badge bg-light text-dark border me-1">{{ member.username }}</span>
+                                        {% empty %}
+                                            No members
                                         {% endfor %}
                                     </td>
-                                    <td>{{ document.get_visibility_display }}</td>
-                                    <td>{{ document.upload_date|date:"M d, Y" }}</td>
                                 </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="5" class="text-center text-muted">No documents found</td>
+                                    <td colspan="3" class="text-center">No teams found</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+            </div>
+            
+            <!-- 3. Document List Tab -->
+            <div class="tab-pane fade" id="documents-pane" role="tabpanel" aria-labelledby="documents-tab">
+                <div class="report-heading">
+                    <i class="bi bi-file-earmark-text"></i>
+                    <h4 class="mb-0">Document List</h4>
+                </div>
+                
+                <div class="table-controls">
+                    <div class="input-group" style="max-width: 300px;">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" id="docSearchInput" class="form-control" placeholder="Search documents...">
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <div class="dropdown column-selector-dropdown">
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="docColumnSelector" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-columns-gap me-1"></i> Columns
+                            </button>
+                            <div class="dropdown-menu column-selector p-2" aria-labelledby="docColumnSelector">
+                                <div class="form-check">
+                                    <input class="form-check-input doc-column-toggle" type="checkbox" id="docCol0" checked disabled>
+                                    <label class="form-check-label" for="docCol0">Serial</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input doc-column-toggle" type="checkbox" id="docCol1" checked>
+                                    <label class="form-check-label" for="docCol1">Name</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input doc-column-toggle" type="checkbox" id="docCol2" checked>
+                                    <label class="form-check-label" for="docCol2">Version</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input doc-column-toggle" type="checkbox" id="docCol3" checked>
+                                    <label class="form-check-label" for="docCol3">Visibility</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input doc-column-toggle" type="checkbox" id="docCol4" checked>
+                                    <label class="form-check-label" for="docCol4">Category</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input doc-column-toggle" type="checkbox" id="docCol5" checked>
+                                    <label class="form-check-label" for="docCol5">Uploaded By</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input doc-column-toggle" type="checkbox" id="docCol6" checked>
+                                    <label class="form-check-label" for="docCol6">Date</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input doc-column-toggle" type="checkbox" id="docCol7" checked>
+                                    <label class="form-check-label" for="docCol7">Shared In</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="dropdown export-dropdown">
+                            <button class="btn btn-success dropdown-toggle" type="button" id="docExportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-download me-1"></i> Export
+                            </button>
+                            <ul class="dropdown-menu" aria-labelledby="docExportDropdown">
+                                <li><h6 class="dropdown-header">Export Options</h6></li>
+                                <li><a class="dropdown-item" href="#" id="exportDocsPDF"><i class="bi bi-file-pdf me-2"></i>Export as PDF</a></li>
+                                <li><a class="dropdown-item" href="#" id="exportDocsExcel"><i class="bi bi-file-excel me-2"></i>Export as Excel</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="#" id="exportDocsSelectedPDF"><i class="bi bi-check-square me-2"></i>Export Selected (PDF)</a></li>
+                                <li><a class="dropdown-item" href="#" id="exportDocsSelectedExcel"><i class="bi bi-check-square me-2"></i>Export Selected (Excel)</a></li>
+                                <li><a class="dropdown-item" href="{% url 'dms:export_report' 'documents' %}"><i class="bi bi-download me-2"></i>Server-side CSV Export</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped" id="docReportTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th data-column="serial">Serial</th>
+                                <th data-column="name">Name</th>
+                                <th data-column="version">Version</th>
+                                <th data-column="visibility">Visibility</th>
+                                <th data-column="category">Category</th>
+                                <th data-column="uploader">Uploaded By</th>
+                                <th data-column="date">Date</th>
+                                <th data-column="shared">Shared In</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for document in all_documents %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>{{ document.title }}</td>
+                                    <td>{{ document.version }}</td>
+                                    <td>{{ document.get_visibility_display }}</td>
+                                    <td>
+                                        {% for category in document.categories.all %}
+                                            <span class="badge bg-light text-dark border me-1">{{ category.name }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>{{ document.owner.username }}</td>
+                                    <td>{{ document.upload_date|date:"M d, Y" }}</td>
+                                    <td>
+                                        {% for perm in document.permissions.all %}
+                                            {% if perm.team %}
+                                                <span class="badge bg-light text-dark border me-1">{{ perm.team.name }}</span>
+                                            {% endif %}
+                                        {% empty %}
+                                            -
+                                        {% endfor %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center">No documents found</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- 4. Statistics Tab -->
+            <div class="tab-pane fade" id="stats-pane" role="tabpanel" aria-labelledby="stats-tab">
+                <div class="report-heading">
+                    <i class="bi bi-graph-up"></i>
+                    <h4 class="mb-0">Statistics</h4>
+                </div>
+                
+                <div class="row">
+                    <!-- Teams by Member Count Section -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="bi bi-people-fill me-2"></i>Teams by Member Count</h5>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Team Name</th>
+                                            <th class="text-center">Members</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for team in teams_with_members %}
+                                            <tr>
+                                                <td>{{ team.name }}</td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-primary rounded-pill">{{ team.member_count }}</span>
+                                                </td>
+                                            </tr>
+                                        {% empty %}
+                                            <tr>
+                                                <td colspan="2" class="text-center text-muted">No teams found</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Most Active Users Section -->
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0"><i class="bi bi-person-badge me-2"></i>Most Active Users</h5>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Username</th>
+                                            <th class="text-end">Activities</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for user in most_active_users %}
+                                            <tr>
+                                                <td>{{ user.user__username }}</td>
+                                                <td class="text-end">{{ user.action_count }}</td>
+                                            </tr>
+                                        {% empty %}
+                                            <tr>
+                                                <td colspan="2" class="text-center text-muted">No activity data found</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Recent Documents Table -->
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Recent Documents</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Owner</th>
+                                        <th>Categories</th>
+                                        <th>Visibility</th>
+                                        <th>Upload Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for document in recent_documents %}
+                                        <tr>
+                                            <td>
+                                                <a href="{% url 'dms:document_detail' document.id %}">{{ document.title }}</a>
+                                            </td>
+                                            <td>{{ document.owner.username }}</td>
+                                            <td>
+                                                {% for category in document.categories.all %}
+                                                    <span class="badge bg-secondary">{{ category.name }}</span>
+                                                {% endfor %}
+                                            </td>
+                                            <td>{{ document.get_visibility_display }}</td>
+                                            <td>{{ document.upload_date|date:"M d, Y" }}</td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted">No documents found</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -315,121 +580,241 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // User roles distribution chart
-        const userRolesCtx = document.getElementById('user-role-chart').getContext('2d');
-        const userRolesData = {
-            labels: [
-                {% for role_name, count in users_by_role.items %}
-                    '{{ role_name }}',
-                {% endfor %}
-            ],
-            datasets: [{
-                label: 'Users by Role',
-                data: [
-                    {% for role_name, count in users_by_role.items %}
-                        {{ count }},
-                    {% endfor %}
-                ],
-                backgroundColor: [
-                    '#dc3545', // Admin
-                    '#6f42c1', // Consultant
-                    '#0d6efd', // Official
-                    '#fd7e14', // Committee
-                    '#198754', // Team Leader
-                    '#6c757d'  // Team Member
-                ]
-            }]
-        };
-        new Chart(userRolesCtx, {
-            type: 'doughnut',
-            data: userRolesData,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'right'
+        // Setup table search functionality
+        function setupTableSearch(inputId, tableId) {
+            const searchInput = document.getElementById(inputId);
+            const table = document.getElementById(tableId);
+            
+            if (searchInput && table) {
+                searchInput.addEventListener('keyup', function() {
+                    const searchTerm = this.value.toLowerCase();
+                    const rows = table.querySelectorAll('tbody tr');
+                    
+                    rows.forEach(row => {
+                        const text = row.textContent.toLowerCase();
+                        if (text.includes(searchTerm)) {
+                            row.style.display = '';
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    });
+                });
+            }
+        }
+        
+        // Setup search for each table
+        setupTableSearch('userSearchInput', 'userReportTable');
+        setupTableSearch('teamSearchInput', 'teamReportTable');
+        setupTableSearch('docSearchInput', 'docReportTable');
+        
+        // Export to PDF function
+        function exportTableToPDF(table, fileName, visibleColumns = null, selectedOnly = false) {
+            // Make sure jspdf is properly loaded
+            if (typeof window.jspdf === 'undefined') {
+                alert('PDF library not loaded. Please check your internet connection and try again.');
+                return;
+            }
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'pt', 'a4');
+            
+            // Prepare table data for export
+            const headers = [];
+            const data = [];
+            
+            // Get headers
+            const headerCells = table.querySelectorAll('thead th');
+            headerCells.forEach((cell, index) => {
+                if (!visibleColumns || visibleColumns.includes(index)) {
+                    if (cell.style.display !== 'none') {
+                        headers.push(cell.textContent);
                     }
                 }
-            }
-        });
-        
-        // Document visibility chart
-        const visibilityCtx = document.getElementById('document-visibility-chart').getContext('2d');
-        const visibilityData = {
-            labels: ['Private', 'Team', 'Public'],
-            datasets: [{
-                label: 'Documents by Visibility',
-                data: [
-                    {{ visibility_counts.Private }},
-                    {{ visibility_counts.Team }},
-                    {{ visibility_counts.Public }}
-                ],
-                backgroundColor: [
-                    '#6c757d', // Private
-                    '#0d6efd', // Team
-                    '#198754'  // Public
-                ]
-            }]
-        };
-        new Chart(visibilityCtx, {
-            type: 'pie',
-            data: visibilityData,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    }
+            });
+            
+            // Get rows
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                if (row.style.display !== 'none' && (!selectedOnly || row.classList.contains('selected-row'))) {
+                    const rowData = [];
+                    const cells = row.querySelectorAll('td');
+                    
+                    cells.forEach((cell, index) => {
+                        if (!visibleColumns || visibleColumns.includes(index)) {
+                            if (cell.style.display !== 'none') {
+                                rowData.push(cell.textContent.trim());
+                            }
+                        }
+                    });
+                    
+                    data.push(rowData);
                 }
-            }
-        });
-        
-        // Activity type chart
-        const activityCtx = document.getElementById('activity-type-chart').getContext('2d');
-        const activityData = {
-            labels: [
-                {% for action_name, count in activity_counts.items %}
-                    '{{ action_name }}',
-                {% endfor %}
-            ],
-            datasets: [{
-                label: 'Activity Count',
-                data: [
-                    {% for action_name, count in activity_counts.items %}
-                        {{ count }},
-                    {% endfor %}
-                ],
-                backgroundColor: [
-                    '#20c997', // Upload
-                    '#0d6efd', // Download
-                    '#6c757d', // View
-                    '#fd7e14', // Edit
-                    '#6f42c1', // Share
-                    '#dc3545'  // Delete
-                ]
-            }]
-        };
-        new Chart(activityCtx, {
-            type: 'bar',
-            data: activityData,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
+            });
+            
+            // Create table in PDF
+            doc.setFontSize(14);
+            doc.text(`${fileName.replace('_', ' ')}`, 40, 40);
+            
+            doc.autoTable({
+                head: [headers],
+                body: data,
+                startY: 50,
+                theme: 'grid',
+                styles: {
+                    fontSize: 10,
+                    cellPadding: 5,
+                    overflow: 'linebreak'
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true
+                headStyles: {
+                    fillColor: [41, 128, 185],
+                    textColor: 255,
+                    fontStyle: 'bold'
+                }
+            });
+            
+            // Save the PDF
+            doc.save(`${fileName}.pdf`);
+        }
+        
+        // Export to Excel function
+        function exportTableToExcel(table, fileName, visibleColumns = null, selectedOnly = false) {
+            // Make sure xlsx is properly loaded
+            if (typeof XLSX === 'undefined') {
+                alert('Excel library not loaded. Please check your internet connection and try again.');
+                return;
+            }
+            
+            // Create a workbook
+            const wb = XLSX.utils.book_new();
+            const data = [];
+            
+            // Get headers
+            const headers = [];
+            const headerCells = table.querySelectorAll('thead th');
+            headerCells.forEach((cell, index) => {
+                if (!visibleColumns || visibleColumns.includes(index)) {
+                    if (cell.style.display !== 'none') {
+                        headers.push(cell.textContent);
                     }
                 }
+            });
+            data.push(headers);
+            
+            // Get rows
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                if (row.style.display !== 'none' && (!selectedOnly || row.classList.contains('selected-row'))) {
+                    const rowData = [];
+                    const cells = row.querySelectorAll('td');
+                    
+                    cells.forEach((cell, index) => {
+                        if (!visibleColumns || visibleColumns.includes(index)) {
+                            if (cell.style.display !== 'none') {
+                                rowData.push(cell.textContent.trim());
+                            }
+                        }
+                    });
+                    
+                    data.push(rowData);
+                }
+            });
+            
+            // Create worksheet and add to workbook
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            XLSX.utils.book_append_sheet(wb, ws, 'Report');
+            
+            // Generate Excel file
+            XLSX.writeFile(wb, `${fileName}.xlsx`);
+        }
+        
+        // Export functions for each table type
+        // User Report exports
+        document.getElementById('exportUsersPDF').addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Exporting Users to PDF');
+            try {
+                const table = document.getElementById('userReportTable');
+                exportTableToPDF(table, 'User_Report');
+            } catch (error) {
+                console.error('Error exporting to PDF:', error);
+                alert('Failed to export PDF: ' + error.message);
+            }
+        });
+        
+        document.getElementById('exportUsersExcel').addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Exporting Users to Excel');
+            try {
+                const table = document.getElementById('userReportTable');
+                exportTableToExcel(table, 'User_Report');
+            } catch (error) {
+                console.error('Error exporting to Excel:', error);
+                alert('Failed to export Excel: ' + error.message);
+            }
+        });
+        
+        // Team Report exports
+        document.getElementById('exportTeamsPDF').addEventListener('click', function(e) {
+            e.preventDefault();
+            try {
+                const table = document.getElementById('teamReportTable');
+                exportTableToPDF(table, 'Team_Report');
+            } catch (error) {
+                console.error('Error exporting to PDF:', error);
+                alert('Failed to export PDF: ' + error.message);
+            }
+        });
+        
+        document.getElementById('exportTeamsExcel').addEventListener('click', function(e) {
+            e.preventDefault();
+            try {
+                const table = document.getElementById('teamReportTable');
+                exportTableToExcel(table, 'Team_Report');
+            } catch (error) {
+                console.error('Error exporting to Excel:', error);
+                alert('Failed to export Excel: ' + error.message);
+            }
+        });
+
+        document.getElementById('exportUsersPDF').addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Exporting Users to PDF');
+            try {
+                const table = document.getElementById('userReportTable');
+                exportTableToPDF(table, 'User_Report');
+            } catch (error) {
+                console.error('Error exporting to PDF:', error);
+                alert('Failed to export PDF: ' + error.message);
+            }
+        });
+        
+        // Document Report exports
+        document.getElementById('exportDocsPDF').addEventListener('click', function(e) {
+            e.preventDefault();
+            try {
+                const table = document.getElementById('docReportTable');
+                exportTableToPDF(table, 'Document_Report');
+            } catch (error) {
+                console.error('Error exporting to PDF:', error);
+                alert('Failed to export PDF: ' + error.message);
+            }
+        });
+        
+        document.getElementById('exportDocsExcel').addEventListener('click', function(e) {
+            e.preventDefault();
+            try {
+                const table = document.getElementById('docReportTable');
+                exportTableToExcel(table, 'Document_Report');
+            } catch (error) {
+                console.error('Error exporting to Excel:', error);
+                alert('Failed to export Excel: ' + error.message);
             }
         });
         
@@ -438,25 +823,251 @@
             window.print();
         });
         
-        // Export data functionality
-        document.getElementById('export-report').addEventListener('click', function() {
-            // This would typically call an endpoint that returns CSV/Excel data
-            // For a simple implementation, we'll just create a CSV from the document categories
-            let csvContent = "Category,Document Count,Percentage\n";
-            
-            {% for category in documents_by_category %}
-                csvContent += "{{ category.name }},{{ category.count }},{{ category.percentage|floatformat:2 }}%\n";
-            {% endfor %}
-            
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', 'document_categories_report.csv');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+        // Initial active tab handling
+        const triggerTabList = document.querySelectorAll('#reportsTab button');
+        triggerTabList.forEach(triggerEl => {
+            const tabTrigger = new bootstrap.Tab(triggerEl);
+            triggerEl.addEventListener('click', event => {
+                event.preventDefault();
+                tabTrigger.show();
+            });
         });
     });
+
+        document.addEventListener('DOMContentLoaded', function() {
+    // Add selection functionality to tables
+    function setupRowSelection(tableId) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        
+        // Add checkbox column to the header
+        const headerRow = table.querySelector('thead tr');
+        if (headerRow) {
+            const checkboxHeader = document.createElement('th');
+            checkboxHeader.setAttribute('data-column', 'select');
+            checkboxHeader.style.width = '40px';
+            
+            const headerCheckbox = document.createElement('input');
+            headerCheckbox.type = 'checkbox';
+            headerCheckbox.className = 'form-check-input';
+            headerCheckbox.addEventListener('change', function() {
+                const checked = this.checked;
+                const rows = table.querySelectorAll('tbody tr');
+                rows.forEach(row => {
+                    if (row.style.display !== 'none') { // Only select visible rows
+                        const checkbox = row.querySelector('.row-select-checkbox');
+                        if (checkbox) {
+                            checkbox.checked = checked;
+                            if (checked) {
+                                row.classList.add('selected-row');
+                            } else {
+                                row.classList.remove('selected-row');
+                            }
+                        }
+                    }
+                });
+            });
+            
+            checkboxHeader.appendChild(headerCheckbox);
+            headerRow.insertBefore(checkboxHeader, headerRow.firstChild);
+        }
+        
+        // Add checkboxes to each row
+        const rows = table.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            const checkboxCell = document.createElement('td');
+            
+            const rowCheckbox = document.createElement('input');
+            rowCheckbox.type = 'checkbox';
+            rowCheckbox.className = 'form-check-input row-select-checkbox';
+            rowCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    row.classList.add('selected-row');
+                } else {
+                    row.classList.remove('selected-row');
+                }
+                
+                // Update header checkbox
+                updateHeaderCheckbox(table);
+            });
+            
+            checkboxCell.appendChild(rowCheckbox);
+            row.insertBefore(checkboxCell, row.firstChild);
+        });
+    }
+    
+    // Function to update header checkbox state
+    function updateHeaderCheckbox(table) {
+        const headerCheckbox = table.querySelector('thead th[data-column="select"] input');
+        const rowCheckboxes = table.querySelectorAll('tbody tr:not([style*="display: none"]) .row-select-checkbox');
+        
+        if (headerCheckbox && rowCheckboxes.length > 0) {
+            const allChecked = Array.from(rowCheckboxes).every(cb => cb.checked);
+            const someChecked = Array.from(rowCheckboxes).some(cb => cb.checked);
+            
+            headerCheckbox.checked = allChecked;
+            headerCheckbox.indeterminate = someChecked && !allChecked;
+        }
+    }
+    
+    // Add visual styling for selected rows in CSS
+    const style = document.createElement('style');
+    style.textContent = `
+        .selected-row {
+            background-color: rgba(13, 110, 253, 0.1) !important;
+        }
+        .table-hover .selected-row:hover {
+            background-color: rgba(13, 110, 253, 0.15) !important;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Setup selection for each table
+    setupRowSelection('userReportTable');
+    setupRowSelection('teamReportTable');
+    setupRowSelection('docReportTable');
+    
+    // Add event listeners for export selected buttons
+    document.getElementById('exportUsersSelectedPDF').addEventListener('click', function(e) {
+        e.preventDefault();
+        try {
+            const table = document.getElementById('userReportTable');
+            const selectedCount = table.querySelectorAll('.selected-row').length;
+            
+            if (selectedCount === 0) {
+                alert('Please select at least one row to export.');
+                return;
+            }
+            
+            exportTableToPDF(table, 'Selected_Users_Report', null, true);
+        } catch (error) {
+            console.error('Error exporting selected to PDF:', error);
+            alert('Failed to export selected to PDF: ' + error.message);
+        }
+    });
+    
+    document.getElementById('exportUsersSelectedExcel').addEventListener('click', function(e) {
+        e.preventDefault();
+        try {
+            const table = document.getElementById('userReportTable');
+            const selectedCount = table.querySelectorAll('.selected-row').length;
+            
+            if (selectedCount === 0) {
+                alert('Please select at least one row to export.');
+                return;
+            }
+            
+            exportTableToExcel(table, 'Selected_Users_Report', null, true);
+        } catch (error) {
+            console.error('Error exporting selected to Excel:', error);
+            alert('Failed to export selected to Excel: ' + error.message);
+        }
+    });
+    
+    document.getElementById('exportDocsSelectedPDF').addEventListener('click', function(e) {
+        e.preventDefault();
+        try {
+            const table = document.getElementById('docReportTable');
+            const selectedCount = table.querySelectorAll('.selected-row').length;
+            
+            if (selectedCount === 0) {
+                alert('Please select at least one row to export.');
+                return;
+            }
+            
+            exportTableToPDF(table, 'Selected_Documents_Report', null, true);
+        } catch (error) {
+            console.error('Error exporting selected to PDF:', error);
+            alert('Failed to export selected to PDF: ' + error.message);
+        }
+    });
+    
+    document.getElementById('exportDocsSelectedExcel').addEventListener('click', function(e) {
+        e.preventDefault();
+        try {
+            const table = document.getElementById('docReportTable');
+            const selectedCount = table.querySelectorAll('.selected-row').length;
+            
+            if (selectedCount === 0) {
+                alert('Please select at least one row to export.');
+                return;
+            }
+            
+            exportTableToExcel(table, 'Selected_Documents_Report', null, true);
+        } catch (error) {
+            console.error('Error exporting selected to Excel:', error);
+            alert('Failed to export selected to Excel: ' + error.message);
+        }
+    });
+
+    // Update search functionality to maintain selection and header checkbox state
+    function updateTableSearch(inputId, tableId) {
+        const searchInput = document.getElementById(inputId);
+        const table = document.getElementById(tableId);
+        
+        if (searchInput && table) {
+            const originalSearchHandler = searchInput.onkeyup;
+            
+            searchInput.onkeyup = null;
+            searchInput.addEventListener('keyup', function() {
+                const searchTerm = this.value.toLowerCase();
+                const rows = table.querySelectorAll('tbody tr');
+                
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    if (text.includes(searchTerm)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+                
+                // Update header checkbox state after filtering
+                updateHeaderCheckbox(table);
+            });
+        }
+    }
+    
+    // Update search handlers
+    updateTableSearch('userSearchInput', 'userReportTable');
+    updateTableSearch('teamSearchInput', 'teamReportTable');
+    updateTableSearch('docSearchInput', 'docReportTable');
+
+    // Column toggle functionality needs to be updated to include the selection column
+    function updateColumnToggleHandlers(tableId, togglePrefix) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        
+        const toggles = document.querySelectorAll(`input[id^="${togglePrefix}"]`);
+        toggles.forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const columnIndex = parseInt(this.id.replace(togglePrefix, ''));
+                // +1 to account for the selection checkbox column we added
+                const actualColumnIndex = columnIndex + 1;
+                
+                const headerCells = table.querySelectorAll('thead th');
+                const rows = table.querySelectorAll('tbody tr');
+                
+                if (headerCells[actualColumnIndex]) {
+                    const display = this.checked ? '' : 'none';
+                    headerCells[actualColumnIndex].style.display = display;
+                    
+                    rows.forEach(row => {
+                        const cells = row.querySelectorAll('td');
+                        if (cells[actualColumnIndex]) {
+                            cells[actualColumnIndex].style.display = display;
+                        }
+                    });
+                }
+            });
+        });
+    }
+    
+    // Update column toggle handlers
+    updateColumnToggleHandlers('userReportTable', 'userCol');
+    updateColumnToggleHandlers('docReportTable', 'docCol');
+});
+
+
 </script>
 {% endblock %}

@@ -736,9 +736,7 @@ def admin_reports(request):
     """Admin dashboard with reports and statistics"""
     # User statistics
     total_users = User.objects.count()
-    users_by_role = {}
-    for role_code, role_name in UserProfile.ROLE_CHOICES:
-        users_by_role[role_name] = UserProfile.objects.filter(role=role_code).count()
+    all_users = User.objects.all().select_related('profile')
     
     # Team statistics
     total_teams = Team.objects.count()
@@ -747,34 +745,20 @@ def admin_reports(request):
     # Document statistics
     total_documents = Document.objects.count()
     recent_documents = Document.objects.order_by('-upload_date')[:10]
+    all_documents = Document.objects.all().select_related('owner').prefetch_related('categories', 'permissions__team')
     
-    # Documents by category
+    # Documents by category for stats
     categories = Category.objects.all()
     documents_by_category = []
     
     for category in categories:
         doc_count = category.documents.count()
-        if doc_count > 0:  # Only include categories with documents
+        if doc_count > 0:
             documents_by_category.append({
                 'name': category.name,
                 'count': doc_count,
                 'percentage': (doc_count / total_documents * 100) if total_documents > 0 else 0
             })
-    
-    # Documents by visibility
-    visibility_counts = {
-        'Private': Document.objects.filter(visibility=Document.VISIBILITY_PRIVATE).count(),
-        'Team': Document.objects.filter(visibility=Document.VISIBILITY_TEAM).count(),
-        'Public': Document.objects.filter(visibility=Document.VISIBILITY_PUBLIC).count()
-    }
-    
-    # Activity statistics
-    recent_activities = AuditLog.objects.order_by('-timestamp')[:20]
-    
-    # Activity count by type
-    activity_counts = {}
-    for action_code, action_name in AuditLog.ACTION_CHOICES:
-        activity_counts[action_name] = AuditLog.objects.filter(action_type=action_code).count()
     
     # Most active users
     most_active_users = AuditLog.objects.values('user__username').annotate(
@@ -783,15 +767,13 @@ def admin_reports(request):
     
     context = {
         'total_users': total_users,
-        'users_by_role': users_by_role,
+        'all_users': all_users,
         'total_teams': total_teams,
         'teams_with_members': teams_with_members,
         'total_documents': total_documents,
+        'all_documents': all_documents,
         'recent_documents': recent_documents,
         'documents_by_category': documents_by_category,
-        'visibility_counts': visibility_counts,
-        'recent_activities': recent_activities,
-        'activity_counts': activity_counts,
         'most_active_users': most_active_users,
     }
     
@@ -842,6 +824,79 @@ def export_report(request, report_type):
                 categories,
                 doc.get_visibility_display(),
                 doc.upload_date.strftime('%Y-%m-%d')
+            ])
+    
+    return response
+
+@login_required
+@role_required(['AD'])  # Only admin
+def export_report(request, report_type):
+    """Export reports in different formats"""
+    import csv
+    from django.http import HttpResponse
+    
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{report_type}_report.csv"'
+    
+    writer = csv.writer(response)
+    
+    if report_type == 'users':
+        # Export user data
+        writer.writerow(['ID', 'Username', 'Full Name', 'Designation', 'Phone', 'Email', 'Role', 'Teams'])
+        users = User.objects.all().select_related('profile')
+        
+        for user in users:
+            try:
+                role = user.profile.get_role_display()
+                designation = user.profile.designation or 'N/A'
+                phone = user.profile.phone_number or 'N/A'
+            except:
+                role = 'N/A'
+                designation = 'N/A'
+                phone = 'N/A'
+                
+            teams = ', '.join([team.name for team in user.teams.all()])
+            writer.writerow([
+                user.id,
+                user.username,
+                user.get_full_name(),
+                designation,
+                phone,
+                user.email,
+                role,
+                teams
+            ])
+            
+    elif report_type == 'teams':
+        # Export team data
+        writer.writerow(['Team Name', 'Member Count', 'Members'])
+        teams = Team.objects.all().prefetch_related('members')
+        
+        for team in teams:
+            members = ', '.join([member.username for member in team.members.all()])
+            writer.writerow([
+                team.name,
+                team.members.count(),
+                members
+            ])
+            
+    elif report_type == 'documents':
+        # Export document data
+        writer.writerow(['Title', 'Version', 'Visibility', 'Categories', 'Uploaded By', 'Date', 'Shared With'])
+        documents = Document.objects.all().select_related('owner').prefetch_related('categories', 'permissions__team')
+        
+        for doc in documents:
+            categories = ', '.join([cat.name for cat in doc.categories.all()])
+            shared_with = ', '.join([perm.team.name for perm in doc.permissions.filter(team__isnull=False)])
+            
+            writer.writerow([
+                doc.title,
+                doc.version,
+                doc.get_visibility_display(),
+                categories,
+                doc.owner.username,
+                doc.upload_date.strftime('%Y-%m-%d'),
+                shared_with
             ])
     
     return response
