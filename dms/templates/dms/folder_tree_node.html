@@ -1,5 +1,6 @@
-<!-- templates/dms/folder_tree_node.html -->
-<div class="folder-item" data-folder-id="{{ node.folder.id }}" style="padding-left: {{ level|add:1|mul:20 }}px;">
+{% load dms_extras %}
+
+<div class="folder-item" data-folder-id="{{ node.folder.id }}" style="padding-left: {{ level|folder_indent }}px;">
     <i class="bi bi-folder folder-icon"></i>
     <span>{{ node.folder.name }}</span>
     {% if node.folder.documents.count > 0 %}

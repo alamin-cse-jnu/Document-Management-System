@@ -1,4 +1,3 @@
-# dms/templatetags/dms_extras.py
 from django import template
 import os
 
@@ -15,6 +14,22 @@ def split_tags(value):
     if not value:
         return []
     return [tag.strip() for tag in value.split(',') if tag.strip()]
+
+@register.filter
+def multiply(value, arg):
+    """Multiplies the value by the argument"""
+    try:
+        return int(value) * int(arg)
+    except (ValueError, TypeError):
+        return 0
+
+@register.filter
+def folder_indent(level):
+    """Calculate indentation for folder tree based on level"""
+    try:
+        return (int(level) + 1) * 20
+    except (ValueError, TypeError):
+        return 20
 
 @register.filter
 def get_shared_users(document):
