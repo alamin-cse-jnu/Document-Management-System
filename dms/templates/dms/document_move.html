@@ -1,0 +1,50 @@
+<!-- templates/dms/document_move.html -->
+{% extends 'base.html' %}
+{% block title %}Move Document - E-Parliament DMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card border-0 shadow">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0"><i class="bi bi-file-earmark-arrow-up me-2"></i>Move Document</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Moving document:</strong> {{ document.title }}<br>
+                        <small class="text-muted">Current location: {{ document.get_location_path }}</small>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label for="id_new_folder" class="form-label">Select New Location</label>
+                            {{ form.new_folder }}
+                            <div class="form-text">Choose a folder to move this document to, or select the root option to place it directly in the category.</div>
+                        </div>
+                        
+                        {% if not form.new_folder.queryset %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            No folders available as destinations. The document can only be moved to category root level.
+                        </div>
+                        {% endif %}
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'dms:document_detail' document.id %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-lg me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-info">
+                                <i class="bi bi-file-earmark-arrow-up me-1"></i> Move Document
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

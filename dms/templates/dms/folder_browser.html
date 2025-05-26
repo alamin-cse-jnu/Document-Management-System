@@ -1,0 +1,230 @@
+<!-- templates/dms/folder_browser.html -->
+{% extends 'base.html' %}
+{% block title %}Folder Browser - E-Parliament DMS{% endblock %}
+
+{% block extra_css %}
+<style>
+    .folder-tree {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        min-height: 400px;
+    }
+    .folder-item {
+        padding: 8px 12px;
+        border-bottom: 1px solid #e9ecef;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .folder-item:hover {
+        background-color: #e9ecef;
+    }
+    .folder-item.active {
+        background-color: #007bff;
+        color: white;
+    }
+    .folder-icon {
+        margin-right: 8px;
+        color: #ffc107;
+    }
+    .category-selector {
+        margin-bottom: 20px;
+    }
+    .content-area {
+        min-height: 400px;
+    }
+    .document-item {
+        padding: 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        background-color: white;
+    }
+    .breadcrumb-nav {
+        background-color: #e9ecef;
+        padding: 10px 15px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+    }
+    .action-buttons {
+        margin-bottom: 15px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2><i class="bi bi-folder2-open me-2"></i>Folder Browser</h2>
+                    <p class="text-muted">Browse and manage folders and documents</p>
+                </div>
+                <div>
+                    {% if selected_category %}
+                    <a href="{% url 'dms:folder_create_in_category' selected_category.id %}" class="btn btn-success">
+                        <i class="bi bi-folder-plus me-1"></i> New Folder
+                    </a>
+                    <a href="{% url 'dms:document_create' %}?category={{ selected_category.id }}" class="btn btn-primary">
+                        <i class="bi bi-file-earmark-plus me-1"></i> Upload Document
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Category Selector -->
+        <div class="col-12 category-selector">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Select Category</h5>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for category in categories %}
+                        <a href="{% url 'dms:folder_browser_category' category.id %}" 
+                           class="btn {% if selected_category and selected_category.id == category.id %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            <i class="bi bi-folder2 me-1"></i>{{ category.name }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% if selected_category %}
+    <div class="row">
+        <!-- Folder Tree -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-folder2 me-2"></i>{{ selected_category.name }}
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="folder-tree" id="folderTree">
+                        <!-- Root level indicator -->
+                        <div class="folder-item active" data-folder-id="">
+                            <i class="bi bi-house-door folder-icon"></i>
+                            <span>{{ selected_category.name }} (Root)</span>
+                        </div>
+                        
+                        <!-- Folder tree will be populated here -->
+                        {% for tree_node in folder_tree %}
+                            {% include 'dms/folder_tree_node.html' with node=tree_node level=0 %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Content Area -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Contents</h5>
+                </div>
+                <div class="card-body content-area">
+                    <!-- Breadcrumb -->
+                    <div class="breadcrumb-nav">
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb mb-0">
+                                <li class="breadcrumb-item">
+                                    <a href="{% url 'dms:folder_browser_category' selected_category.id %}">
+                                        <i class="bi bi-house-door"></i> {{ selected_category.name }}
+                                    </a>
+                                </li>
+                            </ol>
+                        </nav>
+                    </div>
+                    
+                    <!-- Documents in root -->
+                    {% if documents %}
+                    <h6><i class="bi bi-file-earmark me-2"></i>Documents ({{ documents.count }})</h6>
+                    <div class="row">
+                        {% for document in documents %}
+                        <div class="col-md-6 mb-3">
+                            <div class="document-item">
+                                <div class="d-flex align-items-center">
+                                    <div class="me-3">
+                                        {% if document.file.name|lower|slice:"-4:" == ".pdf" %}
+                                            <i class="bi bi-file-earmark-pdf text-danger" style="font-size: 1.5rem;"></i>
+                                        {% elif document.file.name|lower|slice:"-4:" == ".doc" or document.file.name|lower|slice:"-5:" == ".docx" %}
+                                            <i class="bi bi-file-earmark-word text-primary" style="font-size: 1.5rem;"></i>
+                                        {% else %}
+                                            <i class="bi bi-file-earmark" style="font-size: 1.5rem;"></i>
+                                        {% endif %}
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">
+                                            <a href="{% url 'dms:document_detail' document.id %}" class="text-decoration-none">
+                                                {{ document.title }}
+                                            </a>
+                                        </h6>
+                                        <small class="text-muted">
+                                            v{{ document.version }} • {{ document.upload_date|date:"M d, Y" }}
+                                        </small>
+                                    </div>
+                                    <div class="ms-2">
+                                        <a href="{% url 'dms:document_download' document.id %}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-download"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="bi bi-folder2-open display-4 text-muted"></i>
+                        <h5 class="mt-3">No documents in this location</h5>
+                        <p class="text-muted">Upload documents or create folders to get started.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-info text-center">
+                <i class="bi bi-info-circle display-4"></i>
+                <h4 class="mt-3">Select a Category</h4>
+                <p>Choose a category above to browse its folders and documents.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Folder tree interaction
+    const folderItems = document.querySelectorAll('.folder-item');
+    
+    folderItems.forEach(item => {
+        item.addEventListener('click', function() {
+            // Remove active class from all items
+            folderItems.forEach(i => i.classList.remove('active'));
+            
+            // Add active class to clicked item
+            this.classList.add('active');
+            
+            // Get folder ID and load content
+            const folderId = this.getAttribute('data-folder-id');
+            if (folderId) {
+                // Redirect to folder detail view
+                window.location.href = `/dms/folder/${folderId}/`;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

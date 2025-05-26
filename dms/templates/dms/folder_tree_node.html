@@ -1,0 +1,13 @@
+<!-- templates/dms/folder_tree_node.html -->
+<div class="folder-item" data-folder-id="{{ node.folder.id }}" style="padding-left: {{ level|add:1|mul:20 }}px;">
+    <i class="bi bi-folder folder-icon"></i>
+    <span>{{ node.folder.name }}</span>
+    {% if node.folder.documents.count > 0 %}
+        <span class="badge bg-secondary ms-2">{{ node.folder.documents.count }}</span>
+    {% endif %}
+</div>
+
+<!-- Recursively render children -->
+{% for child_node in node.children %}
+    {% include 'dms/folder_tree_node.html' with node=child_node level=level|add:1 %}
+{% endfor %}

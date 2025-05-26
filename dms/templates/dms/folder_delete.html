@@ -1,0 +1,68 @@
+<!-- templates/dms/folder_delete.html -->
+{% extends 'base.html' %}
+{% block title %}Delete Folder - E-Parliament DMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-6 offset-md-3">
+            <div class="card border-0 shadow">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Delete Folder</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Folder:</strong> {{ folder.get_full_path }}
+                    </div>
+                    
+                    <p>Are you sure you want to delete the folder <strong>{{ folder.name }}</strong>?</p>
+                    
+                    {% if folder.subfolders.exists or folder.documents.exists %}
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>Cannot delete this folder!</strong><br>
+                            This folder contains:
+                            <ul class="mt-2 mb-0">
+                                {% if folder.subfolders.exists %}
+                                    <li>{{ folder.subfolders.count }} subfolder{{ folder.subfolders.count|pluralize }}</li>
+                                {% endif %}
+                                {% if folder.documents.exists %}
+                                    <li>{{ folder.documents.count }} document{{ folder.documents.count|pluralize }}</li>
+                                {% endif %}
+                            </ul>
+                            <p class="mt-2 mb-0">Please move or delete all contents before deleting the folder.</p>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            This folder is empty and can be safely deleted.
+                        </div>
+                        
+                        <p class="text-danger"><strong>This action cannot be undone.</strong></p>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'dms:folder_detail' folder.id %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-lg me-1"></i> Cancel
+                        </a>
+                        
+                        {% if not folder.subfolders.exists and not folder.documents.exists %}
+                        <form method="post" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you absolutely sure you want to delete this folder?')">
+                                <i class="bi bi-trash me-1"></i> Delete Folder
+                            </button>
+                        </form>
+                        {% else %}
+                        <button type="button" class="btn btn-danger" disabled>
+                            <i class="bi bi-trash me-1"></i> Cannot Delete
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

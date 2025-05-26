@@ -1,7 +1,33 @@
 # dms/admin.py
 
 from django.contrib import admin
-from .models import Team, Category, Document, DocumentPermission, Comment, AuditLog, UserProfile
+from .models import Team, Category, Document, DocumentPermission, Comment, AuditLog, UserProfile, Folder, FolderPermission
+
+@admin.register(Folder)
+class FolderAdmin(admin.ModelAdmin):
+    list_display = ('name', 'get_full_path', 'owner', 'parent_folder', 'category', 'created_at')
+    list_filter = ('category', 'created_at', 'owner')
+    search_fields = ('name', 'description')
+    raw_id_fields = ('parent_folder', 'owner')
+    
+    def get_full_path(self, obj):
+        return obj.get_full_path()
+    get_full_path.short_description = 'Full Path'
+
+@admin.register(FolderPermission)
+class FolderPermissionAdmin(admin.ModelAdmin):
+    list_display = ('folder', 'user', 'team', 'permission_type', 'inherit_to_subfolders', 'created_at')
+    list_filter = ('permission_type', 'inherit_to_subfolders', 'created_at')
+    raw_id_fields = ('folder', 'user', 'team')
+
+
+@admin.register(Document)
+class DocumentAdmin(admin.ModelAdmin):
+    list_display = ('title', 'owner', 'folder', 'status', 'upload_date', 'version', 'visibility')
+    list_filter = ('visibility', 'status', 'upload_date', 'categories')
+    search_fields = ('title', 'description', 'tags')
+    raw_id_fields = ('folder', 'owner')
+    filter_horizontal = ('categories',)
 
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
@@ -11,12 +37,6 @@ class TeamAdmin(admin.ModelAdmin):
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name',)
-
-@admin.register(Document)
-class DocumentAdmin(admin.ModelAdmin):
-    list_display = ('title', 'owner', 'upload_date', 'version', 'visibility')
-    list_filter = ('visibility', 'upload_date', 'categories')
-    search_fields = ('title', 'description', 'tags')
 
 @admin.register(DocumentPermission)
 class DocumentPermissionAdmin(admin.ModelAdmin):

@@ -1,4 +1,3 @@
-# dms/views.py
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -8,12 +7,91 @@ from django.core.paginator import Paginator
 from django.contrib.auth.models import User
 from django.contrib.auth import logout
 from django.contrib.auth.views import LoginView
-from .models import Document, Team, Category, Comment, AuditLog, DocumentPermission, UserProfile
-from .forms import DocumentForm, CommentForm, DocumentShareForm, UserRegistrationForm
-from .decorators import role_required
 from django.db.models import Count
 import os
 from django.conf import settings
+import json
+# Import models
+from .models import (
+    Document, Team, Category, Comment, AuditLog, DocumentPermission, 
+    UserProfile, Folder, FolderPermission
+)
+
+# Import forms - ADD the missing ones
+from .forms import (
+    DocumentForm, CommentForm, DocumentShareForm, UserRegistrationForm,
+    FolderForm, FolderMoveForm, DocumentMoveForm  # ADD these
+)
+
+# Import decorators
+from .decorators import role_required
+
+# Import utilities - CREATE this file if it doesn't exist
+try:
+    from .utils import (
+        has_folder_permission, get_accessible_folders, get_folder_tree, 
+        can_create_folder_in, get_documents_in_folder
+    )
+except ImportError:
+    # If utils.py doesn't exist, we'll create placeholder functions
+    def has_folder_permission(user, folder, permission_type):
+        # Admin can do anything
+        if user.profile.role == UserProfile.ROLE_ADMIN:
+            return True
+        # Owner can do anything with their folder
+        if folder.owner == user:
+            return True
+        # For now, allow read access to team members
+        if permission_type == FolderPermission.PERMISSION_READ:
+            return user.teams.filter(id__in=folder.owner.teams.values_list('id', flat=True)).exists()
+        return False
+    
+    def get_accessible_folders(user, category=None):
+        if user.profile.role == UserProfile.ROLE_ADMIN:
+            if category:
+                return Folder.objects.filter(category=category)
+            return Folder.objects.all()
+        # For regular users, return folders they own or have access to
+        user_teams = user.teams.all()
+        if category:
+            return Folder.objects.filter(
+                Q(category=category) & 
+                (Q(owner=user) | Q(owner__teams__in=user_teams))
+            ).distinct()
+        return Folder.objects.filter(
+            Q(owner=user) | Q(owner__teams__in=user_teams)
+        ).distinct()
+    
+    def get_folder_tree(user, category):
+        accessible_folders = get_accessible_folders(user, category)
+        tree = []
+        folder_dict = {}
+        
+        for folder in accessible_folders:
+            folder_dict[folder.id] = {
+                'folder': folder,
+                'children': []
+            }
+        
+        for folder in accessible_folders:
+            if folder.parent_folder and folder.parent_folder.id in folder_dict:
+                folder_dict[folder.parent_folder.id]['children'].append(folder_dict[folder.id])
+            else:
+                tree.append(folder_dict[folder.id])
+        
+        return tree
+    
+    def can_create_folder_in(user, parent_folder=None, category=None):
+        if user.profile.role == UserProfile.ROLE_ADMIN:
+            return True
+        if parent_folder:
+            return has_folder_permission(user, parent_folder, FolderPermission.PERMISSION_WRITE)
+        return True  # Allow creating root folders for now
+    
+    def get_documents_in_folder(user, folder, include_subfolders=False):
+        if not has_folder_permission(user, folder, FolderPermission.PERMISSION_READ):
+            return Document.objects.none()
+        return Document.objects.filter(folder=folder, status=Document.DOCUMENT_STATUS_PUBLISHED)
 
 def create_audit_log(user, action_type, target_object, details=''):
     """Helper function to create audit logs"""
@@ -107,8 +185,18 @@ def document_list(request):
 
 @login_required
 def document_create(request):
+    """Create new document with folder support"""
+    category_id = request.GET.get('category')
+    folder_id = request.GET.get('folder')
+    
     if request.method == 'POST':
-        form = DocumentForm(request.POST, request.FILES)
+        form = DocumentForm(
+            request.POST, 
+            request.FILES, 
+            user=request.user,
+            category_id=category_id,
+            folder_id=folder_id
+        )
         if form.is_valid():
             document = form.save(commit=False)
             document.owner = request.user
@@ -117,13 +205,190 @@ def document_create(request):
             # Save categories
             form.save_m2m()
             
-            create_audit_log(request.user, AuditLog.ACTION_UPLOAD, f"Document: {document.id}")
-            messages.success(request, "Document uploaded successfully!")
+            # Create audit log
+            action_type = AuditLog.ACTION_UPLOAD if document.status == Document.DOCUMENT_STATUS_PUBLISHED else 'DR'
+            create_audit_log(request.user, action_type, f"Document: {document.id}")
+            
+            if document.status == Document.DOCUMENT_STATUS_DRAFT:
+                messages.success(request, f"Document '{document.title}' saved as draft!")
+            else:
+                messages.success(request, f"Document '{document.title}' uploaded successfully!")
+            
             return redirect('dms:document_detail', pk=document.id)
     else:
-        form = DocumentForm()
+        form = DocumentForm(
+            user=request.user,
+            category_id=category_id,
+            folder_id=folder_id
+        )
     
-    return render(request, 'dms/document_form.html', {'form': form})
+    # Get context for breadcrumbs
+    context = {'form': form}
+    
+    if folder_id:
+        try:
+            folder = Folder.objects.get(id=folder_id)
+            context['folder'] = folder
+            context['breadcrumbs'] = folder.get_ancestors() + [folder]
+        except Folder.DoesNotExist:
+            pass
+    elif category_id:
+        try:
+            category = Category.objects.get(id=category_id)
+            context['category'] = category
+        except Category.DoesNotExist:
+            pass
+    
+    return render(request, 'dms/document_form.html', context)
+
+@login_required
+def document_update(request, pk):
+    """Update document with folder support"""
+    document = get_object_or_404(Document, pk=pk)
+    
+    # Check if user has permission to edit
+    if document.owner != request.user and not DocumentPermission.objects.filter(
+        document=document,
+        user=request.user,
+        permission_type=DocumentPermission.PERMISSION_WRITE
+    ).exists() and not DocumentPermission.objects.filter(
+        document=document,
+        team__in=request.user.teams.all(),
+        permission_type=DocumentPermission.PERMISSION_WRITE
+    ).exists():
+        messages.error(request, "You don't have permission to edit this document.")
+        return redirect('dms:document_detail', pk=pk)
+    
+    if request.method == 'POST':
+        form = DocumentForm(
+            request.POST, 
+            request.FILES, 
+            instance=document,
+            user=request.user
+        )
+        if form.is_valid():
+            # If new file uploaded, increment version
+            if 'file' in request.FILES:
+                document.version += 1
+            
+            document = form.save()
+            create_audit_log(request.user, AuditLog.ACTION_EDIT, f"Document: {document.id}")
+            messages.success(request, "Document updated successfully!")
+            return redirect('dms:document_detail', pk=document.id)
+    else:
+        form = DocumentForm(instance=document, user=request.user)
+    
+    return render(request, 'dms/document_form.html', {'form': form, 'document': document})
+
+@login_required
+def document_move(request, pk):
+    """Move document to different folder"""
+    document = get_object_or_404(Document, pk=pk)
+    
+    # Check permissions (owner or admin)
+    if document.owner != request.user and request.user.profile.role != UserProfile.ROLE_ADMIN:
+        messages.error(request, "You don't have permission to move this document.")
+        return redirect('dms:document_detail', pk=pk)
+    
+    if request.method == 'POST':
+        form = DocumentMoveForm(request.POST, document=document, user=request.user)
+        if form.is_valid():
+            new_folder = form.cleaned_data['new_folder']
+            old_location = document.get_location_path()
+            
+            document.folder = new_folder
+            document.save()
+            
+            new_location = document.get_location_path()
+            create_audit_log(
+                request.user, 
+                AuditLog.ACTION_EDIT, 
+                f"Document: {document.id}",
+                f"Moved from {old_location} to {new_location}"
+            )
+            
+            messages.success(request, "Document moved successfully!")
+            return redirect('dms:document_detail', pk=document.id)
+    else:
+        form = DocumentMoveForm(document=document, user=request.user)
+    
+    context = {
+        'document': document,
+        'form': form,
+    }
+    
+    return render(request, 'dms/document_move.html', context)
+
+@login_required
+def document_publish(request, pk):
+    """Publish a draft document"""
+    document = get_object_or_404(Document, pk=pk)
+    
+    # Check permissions
+    if document.owner != request.user and request.user.profile.role != UserProfile.ROLE_ADMIN:
+        messages.error(request, "You don't have permission to publish this document.")
+        return redirect('dms:document_detail', pk=pk)
+    
+    if document.status == Document.DOCUMENT_STATUS_DRAFT:
+        document.status = Document.DOCUMENT_STATUS_PUBLISHED
+        from django.utils import timezone
+        document.published_at = timezone.now()
+        document.save()
+        
+        create_audit_log(
+            request.user, 
+            AuditLog.ACTION_UPLOAD, 
+            f"Document: {document.id}",
+            "Published draft document"
+        )
+        
+        messages.success(request, f"Document '{document.title}' published successfully!")
+    else:
+        messages.info(request, "Document is already published.")
+    
+    return redirect('dms:document_detail', pk=pk)
+
+@login_required
+def document_unpublish(request, pk):
+    """Unpublish a document (make it draft)"""
+    document = get_object_or_404(Document, pk=pk)
+    
+    # Check permissions (only owner or admin)
+    if document.owner != request.user and request.user.profile.role != UserProfile.ROLE_ADMIN:
+        messages.error(request, "You don't have permission to unpublish this document.")
+        return redirect('dms:document_detail', pk=pk)
+    
+    if document.status == Document.DOCUMENT_STATUS_PUBLISHED:
+        document.status = Document.DOCUMENT_STATUS_DRAFT
+        document.save()
+        
+        create_audit_log(
+            request.user, 
+            'DR', 
+            f"Document: {document.id}",
+            "Unpublished document (made draft)"
+        )
+        
+        messages.success(request, f"Document '{document.title}' unpublished (now draft).")
+    else:
+        messages.info(request, "Document is already a draft.")
+    
+    return redirect('dms:document_detail', pk=pk)
+
+@login_required
+def my_drafts(request):
+    """View user's draft documents"""
+    drafts = Document.objects.filter(
+        owner=request.user,
+        status=Document.DOCUMENT_STATUS_DRAFT
+    ).order_by('-upload_date')
+    
+    context = {
+        'drafts': drafts,
+    }
+    
+    return render(request, 'dms/my_drafts.html', context)
+
 
 @login_required
 def document_detail(request, pk):
@@ -208,38 +473,7 @@ def document_detail(request, pk):
     
     return render(request, 'dms/document_detail.html', context)
 
-@login_required
-def document_update(request, pk):
-    document = get_object_or_404(Document, pk=pk)
-    
-    # Check if user has permission to edit
-    if document.owner != request.user and not DocumentPermission.objects.filter(
-        document=document,
-        user=request.user,
-        permission_type=DocumentPermission.PERMISSION_WRITE
-    ).exists() and not DocumentPermission.objects.filter(
-        document=document,
-        team__in=request.user.teams.all(),
-        permission_type=DocumentPermission.PERMISSION_WRITE
-    ).exists():
-        messages.error(request, "You don't have permission to edit this document.")
-        return redirect('dms:document_detail', pk=pk)
-    
-    if request.method == 'POST':
-        form = DocumentForm(request.POST, request.FILES, instance=document)
-        if form.is_valid():
-            # If new file uploaded, increment version
-            if 'file' in request.FILES:
-                document.version += 1
-            
-            form.save()
-            create_audit_log(request.user, AuditLog.ACTION_EDIT, f"Document: {document.id}")
-            messages.success(request, "Document updated successfully!")
-            return redirect('dms:document_detail', pk=document.id)
-    else:
-        form = DocumentForm(instance=document)
-    
-    return render(request, 'dms/document_form.html', {'form': form, 'document': document})
+
 
 @login_required
 def document_share(request, pk):
@@ -745,7 +979,16 @@ def admin_reports(request):
     # Document statistics
     total_documents = Document.objects.count()
     recent_documents = Document.objects.order_by('-upload_date')[:10]
-    all_documents = Document.objects.all().select_related('owner').prefetch_related('categories', 'permissions__team')
+    
+    # Optimize query for document list with all necessary relations
+    all_documents = Document.objects.all().select_related(
+        'owner'
+    ).prefetch_related(
+        'categories',
+        'permissions__team',
+        'permissions__user',
+        'permissions__team__members'
+    )
     
     # Documents by category for stats
     categories = Category.objects.all()
@@ -778,55 +1021,6 @@ def admin_reports(request):
     }
     
     return render(request, 'dms/admin_reports.html', context)
-
-@login_required
-@role_required(['AD'])  # Only admin
-def export_report(request, report_type):
-    """Export reports in different formats"""
-    import csv
-    from django.http import HttpResponse
-    
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="{report_type}_report.csv"'
-    
-    writer = csv.writer(response)
-    
-    if report_type == 'users':
-        # Export user data
-        writer.writerow(['Username', 'Full Name', 'Email', 'Role', 'Teams'])
-        users = User.objects.all()
-        
-        for user in users:
-            try:
-                role = user.profile.get_role_display()
-            except:
-                role = 'N/A'
-                
-            teams = ', '.join([team.name for team in user.teams.all()])
-            writer.writerow([
-                user.username,
-                user.get_full_name(),
-                user.email,
-                role,
-                teams
-            ])
-            
-    elif report_type == 'documents':
-        # Export document data
-        writer.writerow(['Title', 'Owner', 'Categories', 'Visibility', 'Upload Date'])
-        documents = Document.objects.all()
-        
-        for doc in documents:
-            categories = ', '.join([cat.name for cat in doc.categories.all()])
-            writer.writerow([
-                doc.title,
-                doc.owner.username,
-                categories,
-                doc.get_visibility_display(),
-                doc.upload_date.strftime('%Y-%m-%d')
-            ])
-    
-    return response
 
 @login_required
 @role_required(['AD'])  # Only admin
@@ -881,13 +1075,50 @@ def export_report(request, report_type):
             ])
             
     elif report_type == 'documents':
-        # Export document data
-        writer.writerow(['Title', 'Version', 'Visibility', 'Categories', 'Uploaded By', 'Date', 'Shared With'])
-        documents = Document.objects.all().select_related('owner').prefetch_related('categories', 'permissions__team')
+        # Export document data with shared users
+        writer.writerow(['Title', 'Version', 'Visibility', 'Categories', 'Uploaded By', 'Date', 'Shared In Teams', 'Shared With Users'])
+        documents = Document.objects.all().select_related('owner').prefetch_related(
+            'categories', 
+            'permissions__team',
+            'permissions__user',
+            'permissions__team__members'
+        )
         
         for doc in documents:
             categories = ', '.join([cat.name for cat in doc.categories.all()])
-            shared_with = ', '.join([perm.team.name for perm in doc.permissions.filter(team__isnull=False)])
+            
+            # Get teams the document is shared with
+            shared_teams = ', '.join([perm.team.name for perm in doc.permissions.filter(team__isnull=False)])
+            
+            # Get shared users (use the logic from the template filter)
+            shared_users = []
+            
+            # Direct permissions
+            for perm in doc.permissions.filter(user__isnull=False):
+                if perm.user != doc.owner:  # Exclude the owner
+                    full_name = perm.user.get_full_name() or perm.user.username
+                    shared_users.append(full_name)
+            
+            # Team members
+            team_members = set()
+            for perm in doc.permissions.filter(team__isnull=False):
+                for member in perm.team.members.all():
+                    if member != doc.owner and member.get_full_name() not in shared_users:  # Exclude owner and already counted users
+                        team_members.add(member.get_full_name() or member.username)
+            
+            shared_users.extend(list(team_members))
+            
+            # For Team visibility, add team members of owner's teams
+            if doc.visibility == 'TM':
+                for team in doc.owner.teams.all():
+                    for member in team.members.all():
+                        if member != doc.owner and member.get_full_name() not in shared_users:
+                            shared_users.append(member.get_full_name() or member.username)
+            
+            # All users for public visibility
+            shared_users_text = ', '.join(shared_users) if shared_users else "None"
+            if doc.visibility == 'PB':
+                shared_users_text = "All Users"
             
             writer.writerow([
                 doc.title,
@@ -896,7 +1127,392 @@ def export_report(request, report_type):
                 categories,
                 doc.owner.username,
                 doc.upload_date.strftime('%Y-%m-%d'),
-                shared_with
+                shared_teams or "None",
+                shared_users_text
             ])
     
     return response
+
+@login_required
+@role_required(['AD'])  # Only admin
+def category_list(request):
+    """List all categories with option to create, edit, or delete"""
+    categories = Category.objects.all().order_by('name')
+    
+    context = {
+        'categories': categories
+    }
+    
+    return render(request, 'dms/category_list.html', context)
+
+@login_required
+@role_required(['AD'])  # Only admin
+def category_create(request):
+    """Create a new category"""
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        description = request.POST.get('description', '')
+        
+        if not name:
+            messages.error(request, "Category name is required.")
+            return redirect('dms:category_list')
+        
+        Category.objects.create(name=name, description=description)
+        messages.success(request, f"Category '{name}' created successfully.")
+        
+    return redirect('dms:category_list')
+
+@login_required
+@role_required(['AD'])  # Only admin
+def category_update(request, pk):
+    """Update an existing category"""
+    category = get_object_or_404(Category, pk=pk)
+    
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        description = request.POST.get('description', '')
+        
+        if not name:
+            messages.error(request, "Category name is required.")
+            return redirect('dms:category_list')
+        
+        category.name = name
+        category.description = description
+        category.save()
+        
+        messages.success(request, f"Category '{name}' updated successfully.")
+    
+    return redirect('dms:category_list')
+
+@login_required
+@role_required(['AD'])  # Only admin
+def category_delete(request, pk):
+    """Delete a category with confirmation"""
+    category = get_object_or_404(Category, pk=pk)
+    
+    if request.method == 'POST':
+        category_name = category.name
+        
+        try:
+            # Check if the category is in use
+            if category.documents.exists():
+                messages.error(request, f"Cannot delete category '{category_name}' because it is currently being used by one or more documents.")
+                return redirect('dms:category_list')
+            
+            # Delete the category
+            category.delete()
+            messages.success(request, f"Category '{category_name}' deleted successfully.")
+        except Exception as e:
+            messages.error(request, f"Error deleting category: {str(e)}")
+    
+    return redirect('dms:category_list')
+
+@login_required
+def folder_browser(request, category_id=None):
+    """
+    Main folder browser view - shows folders and documents in tree structure
+    """
+    categories = Category.objects.all()
+    selected_category = None
+    folder_tree = []
+    documents = Document.objects.none()
+    
+    if category_id:
+        selected_category = get_object_or_404(Category, id=category_id)
+        folder_tree = get_folder_tree(request.user, selected_category)
+        
+        # Get documents in category root (not in any folder)
+        documents = Document.objects.filter(
+            categories=selected_category,
+            folder__isnull=True,
+            status=Document.DOCUMENT_STATUS_PUBLISHED
+        )
+    
+    context = {
+        'categories': categories,
+        'selected_category': selected_category,
+        'folder_tree': folder_tree,
+        'documents': documents,
+    }
+    
+    return render(request, 'dms/folder_browser.html', context)
+
+@login_required
+def folder_detail(request, folder_id):
+    """
+    View folder contents - subfolders and documents
+    """
+    folder = get_object_or_404(Folder, id=folder_id)
+    
+    # Check read permission
+    if not has_folder_permission(request.user, folder, FolderPermission.PERMISSION_READ):
+        messages.error(request, "You don't have permission to access this folder.")
+        return redirect('dms:folder_browser', category_id=folder.category.id)
+    
+    # Get subfolders user can access
+    subfolders = []
+    for subfolder in folder.subfolders.all():
+        if has_folder_permission(request.user, subfolder, FolderPermission.PERMISSION_READ):
+            subfolders.append(subfolder)
+    
+    # Get documents in this folder
+    documents = Document.objects.filter(
+        folder=folder,
+        status=Document.DOCUMENT_STATUS_PUBLISHED
+    )
+    
+    # Get breadcrumb path
+    breadcrumbs = folder.get_ancestors() + [folder]
+    
+    # Check permissions for actions
+    can_create_subfolder = can_create_folder_in(request.user, parent_folder=folder)
+    can_upload = has_folder_permission(request.user, folder, FolderPermission.PERMISSION_WRITE)
+    can_edit = (folder.owner == request.user) or (request.user.profile.role == UserProfile.ROLE_ADMIN)
+    can_delete = (folder.owner == request.user) or (request.user.profile.role == UserProfile.ROLE_ADMIN)
+    
+    context = {
+        'folder': folder,
+        'subfolders': subfolders,
+        'documents': documents,
+        'breadcrumbs': breadcrumbs,
+        'can_create_subfolder': can_create_subfolder,
+        'can_upload': can_upload,
+        'can_edit': can_edit,
+        'can_delete': can_delete,
+    }
+    
+    return render(request, 'dms/folder_detail.html', context)
+
+@login_required
+def folder_create(request, category_id=None, parent_folder_id=None):
+    """
+    Create a new folder
+    """
+    category = None
+    parent_folder = None
+    
+    if category_id:
+        category = get_object_or_404(Category, id=category_id)
+    
+    if parent_folder_id:
+        parent_folder = get_object_or_404(Folder, id=parent_folder_id)
+        category = parent_folder.category
+    
+    # Check permissions
+    if not can_create_folder_in(request.user, parent_folder, category):
+        messages.error(request, "You don't have permission to create folders here.")
+        if parent_folder:
+            return redirect('dms:folder_detail', folder_id=parent_folder.id)
+        return redirect('dms:folder_browser', category_id=category.id)
+    
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        
+        if not name:
+            messages.error(request, "Folder name is required.")
+        else:
+            try:
+                folder = Folder.objects.create(
+                    name=name,
+                    description=description,
+                    parent_folder=parent_folder,
+                    category=category,
+                    owner=request.user
+                )
+                
+                # Create audit log
+                create_audit_log(
+                    request.user, 
+                    'CR', 
+                    f"Folder: {folder.id} - {folder.name}",
+                    f"Created folder in {folder.get_full_path()}"
+                )
+                
+                messages.success(request, f"Folder '{name}' created successfully.")
+                return redirect('dms:folder_detail', folder_id=folder.id)
+                
+            except Exception as e:
+                messages.error(request, f"Error creating folder: {str(e)}")
+    
+    context = {
+        'category': category,
+        'parent_folder': parent_folder,
+    }
+    
+    return render(request, 'dms/folder_create.html', context)
+
+@login_required
+def folder_update(request, folder_id):
+    """
+    Update folder details
+    """
+    folder = get_object_or_404(Folder, id=folder_id)
+    
+    # Check permissions (owner or admin)
+    if folder.owner != request.user and request.user.profile.role != UserProfile.ROLE_ADMIN:
+        messages.error(request, "You don't have permission to edit this folder.")
+        return redirect('dms:folder_detail', folder_id=folder.id)
+    
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        
+        if not name:
+            messages.error(request, "Folder name is required.")
+        else:
+            try:
+                folder.name = name
+                folder.description = description
+                folder.save()
+                
+                create_audit_log(
+                    request.user, 
+                    'ED', 
+                    f"Folder: {folder.id} - {folder.name}",
+                    f"Updated folder {folder.get_full_path()}"
+                )
+                
+                messages.success(request, f"Folder '{name}' updated successfully.")
+                return redirect('dms:folder_detail', folder_id=folder.id)
+                
+            except Exception as e:
+                messages.error(request, f"Error updating folder: {str(e)}")
+    
+    context = {
+        'folder': folder,
+    }
+    
+    return render(request, 'dms/folder_update.html', context)
+
+@login_required
+def folder_delete(request, folder_id):
+    """
+    Delete a folder (only owner or admin)
+    """
+    folder = get_object_or_404(Folder, id=folder_id)
+    
+    # Check permissions (owner or admin)
+    if folder.owner != request.user and request.user.profile.role != UserProfile.ROLE_ADMIN:
+        messages.error(request, "You don't have permission to delete this folder.")
+        return redirect('dms:folder_detail', folder_id=folder.id)
+    
+    if request.method == 'POST':
+        folder_name = folder.name
+        category_id = folder.category.id
+        parent_folder_id = folder.parent_folder.id if folder.parent_folder else None
+        
+        try:
+            # Check if folder has content
+            if folder.subfolders.exists() or folder.documents.exists():
+                messages.error(request, "Cannot delete folder that contains subfolders or documents.")
+                return redirect('dms:folder_detail', folder_id=folder.id)
+            
+            create_audit_log(
+                request.user, 
+                'DL', 
+                f"Folder: {folder.id} - {folder_name}",
+                f"Deleted folder {folder.get_full_path()}"
+            )
+            
+            folder.delete()
+            messages.success(request, f"Folder '{folder_name}' deleted successfully.")
+            
+            # Redirect to parent folder or category
+            if parent_folder_id:
+                return redirect('dms:folder_detail', folder_id=parent_folder_id)
+            else:
+                return redirect('dms:folder_browser', category_id=category_id)
+                
+        except Exception as e:
+            messages.error(request, f"Error deleting folder: {str(e)}")
+            return redirect('dms:folder_detail', folder_id=folder.id)
+    
+    context = {
+        'folder': folder,
+    }
+    
+    return render(request, 'dms/folder_delete.html', context)
+
+@login_required
+def folder_move(request, folder_id):
+    """
+    Move folder to different parent
+    """
+    folder = get_object_or_404(Folder, id=folder_id)
+    
+    # Check permissions (owner or admin)
+    if folder.owner != request.user and request.user.profile.role != UserProfile.ROLE_ADMIN:
+        messages.error(request, "You don't have permission to move this folder.")
+        return redirect('dms:folder_detail', folder_id=folder.id)
+    
+    if request.method == 'POST':
+        new_parent_id = request.POST.get('new_parent_id')
+        new_parent = None
+        
+        if new_parent_id:
+            new_parent = get_object_or_404(Folder, id=new_parent_id)
+            
+            # Check if move is valid (no circular reference)
+            if not folder.can_be_moved_to(new_parent):
+                messages.error(request, "Cannot move folder: would create circular reference.")
+                return redirect('dms:folder_detail', folder_id=folder.id)
+        
+        try:
+            old_path = folder.get_full_path()
+            folder.parent_folder = new_parent
+            folder.save()
+            
+            create_audit_log(
+                request.user, 
+                'ED', 
+                f"Folder: {folder.id} - {folder.name}",
+                f"Moved folder from {old_path} to {folder.get_full_path()}"
+            )
+            
+            messages.success(request, f"Folder moved successfully.")
+            return redirect('dms:folder_detail', folder_id=folder.id)
+            
+        except Exception as e:
+            messages.error(request, f"Error moving folder: {str(e)}")
+    
+    # Get possible parent folders (excluding self and descendants)
+    all_folders = get_accessible_folders(request.user, folder.category)
+    possible_parents = []
+    
+    for f in all_folders:
+        if f != folder and not folder.is_ancestor_of(f):
+            possible_parents.append(f)
+    
+    context = {
+        'folder': folder,
+        'possible_parents': possible_parents,
+    }
+    
+    return render(request, 'dms/folder_move.html', context)
+
+@login_required
+def get_folder_tree_json(request, category_id):
+    """
+    AJAX endpoint to get folder tree as JSON
+    """
+    category = get_object_or_404(Category, id=category_id)
+    folder_tree = get_folder_tree(request.user, category)
+    
+    def serialize_tree(tree):
+        result = []
+        for node in tree:
+            folder = node['folder']
+            result.append({
+                'id': folder.id,
+                'name': folder.name,
+                'path': folder.get_full_path(),
+                'can_write': has_folder_permission(request.user, folder, FolderPermission.PERMISSION_WRITE),
+                'children': serialize_tree(node['children'])
+            })
+        return result
+    
+    return JsonResponse({
+        'tree': serialize_tree(folder_tree),
+        'category': category.name
+    })

@@ -30,6 +30,131 @@ class Category(models.Model):
     class Meta:
         verbose_name_plural = "Categories"
 
+class Folder(models.Model):
+    """
+    Hierarchical folder structure within categories
+    """
+    name = models.CharField(max_length=255)
+    parent_folder = models.ForeignKey(
+        'self', 
+        null=True, 
+        blank=True, 
+        on_delete=models.CASCADE,
+        related_name='subfolders'
+    )
+    category = models.ForeignKey(
+        'Category', 
+        on_delete=models.CASCADE, 
+        related_name='folders'
+    )
+    owner = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='owned_folders'
+    )
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        # Ensure unique folder names within the same parent
+        unique_together = ['name', 'parent_folder', 'category']
+        ordering = ['name']
+    
+    def __str__(self):
+        return f"{self.get_full_path()}"
+    
+    def get_full_path(self):
+        """Get the full path of the folder"""
+        if self.parent_folder:
+            return f"{self.parent_folder.get_full_path()}/{self.name}"
+        return f"{self.category.name}/{self.name}"
+    
+    def get_ancestors(self):
+        """Get all parent folders up to the root"""
+        ancestors = []
+        current = self.parent_folder
+        while current:
+            ancestors.insert(0, current)
+            current = current.parent_folder
+        return ancestors
+    
+    def get_descendants(self):
+        """Get all subfolders recursively"""
+        descendants = []
+        for subfolder in self.subfolders.all():
+            descendants.append(subfolder)
+            descendants.extend(subfolder.get_descendants())
+        return descendants
+    
+    def is_ancestor_of(self, other_folder):
+        """Check if this folder is an ancestor of another folder"""
+        return self in other_folder.get_ancestors()
+    
+    def can_be_moved_to(self, new_parent):
+        """Check if folder can be moved to new parent (prevent circular references)"""
+        if new_parent is None:
+            return True
+        if new_parent == self:
+            return False
+        if self.is_ancestor_of(new_parent):
+            return False
+        return True
+
+
+class FolderPermission(models.Model):
+    """
+    Folder-level permissions (similar to DocumentPermission)
+    """
+    folder = models.ForeignKey(
+        Folder, 
+        on_delete=models.CASCADE, 
+        related_name='permissions'
+    )
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True
+    )
+    team = models.ForeignKey(
+        'Team', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True
+    )
+    
+    # Permission types
+    PERMISSION_READ = 'RD'
+    PERMISSION_WRITE = 'WR'
+    PERMISSION_DELETE = 'DL'
+    PERMISSION_MANAGE = 'MG'  # Can create subfolders and manage permissions
+    
+    PERMISSION_CHOICES = [
+        (PERMISSION_READ, 'Read'),
+        (PERMISSION_WRITE, 'Write'),
+        (PERMISSION_DELETE, 'Delete'),
+        (PERMISSION_MANAGE, 'Manage'),
+    ]
+    
+    permission_type = models.CharField(
+        max_length=2,
+        choices=PERMISSION_CHOICES,
+        default=PERMISSION_READ,
+    )
+    
+    inherit_to_subfolders = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(user__isnull=False) | models.Q(team__isnull=False),
+                name='folder_either_user_or_team_not_null'
+            )
+        ]
+        unique_together = ['folder', 'user', 'team', 'permission_type']
+
 class Document(models.Model):
     title = models.CharField(max_length=255)
     file = models.FileField(upload_to=document_file_path)
@@ -40,7 +165,32 @@ class Document(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='documents')
     upload_date = models.DateTimeField(auto_now_add=True)
     
-    # Visibility choices
+    # NEW: Folder relationship
+    folder = models.ForeignKey(
+        Folder, 
+        null=True, 
+        blank=True, 
+        on_delete=models.CASCADE,
+        related_name='documents'
+    )
+    
+    # NEW: Draft functionality
+    DOCUMENT_STATUS_DRAFT = 'DR'
+    DOCUMENT_STATUS_PUBLISHED = 'PB'
+    
+    DOCUMENT_STATUS_CHOICES = [
+        (DOCUMENT_STATUS_DRAFT, 'Draft'),
+        (DOCUMENT_STATUS_PUBLISHED, 'Published'),
+    ]
+    
+    status = models.CharField(
+        max_length=2,
+        choices=DOCUMENT_STATUS_CHOICES,
+        default=DOCUMENT_STATUS_PUBLISHED,
+    )
+    published_at = models.DateTimeField(null=True, blank=True)
+    
+    # Existing visibility choices
     VISIBILITY_PRIVATE = 'PR'
     VISIBILITY_TEAM = 'TM'
     VISIBILITY_PUBLIC = 'PB'
@@ -59,6 +209,24 @@ class Document(models.Model):
     
     def __str__(self):
         return self.title
+    
+    def get_location_path(self):
+        """Get the full path including category and folder"""
+        if self.folder:
+            return f"{self.folder.get_full_path()}"
+        else:
+            # If no folder, show category only
+            categories = self.categories.all()
+            if categories:
+                return f"{categories.first().name}/"
+            return "Uncategorized/"
+    
+    def save(self, *args, **kwargs):
+        # Set published_at when status changes to published
+        if self.status == self.DOCUMENT_STATUS_PUBLISHED and not self.published_at:
+            from django.utils import timezone
+            self.published_at = timezone.now()
+        super().save(*args, **kwargs)
 
 class DocumentPermission(models.Model):
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name='permissions')
@@ -169,3 +337,6 @@ class UserProfile(models.Model):
     
     def __str__(self):
         return f"{self.user.username} - {self.get_role_display()}"
+    
+
+

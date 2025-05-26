@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load dms_extras %}
 {% block title %}Admin Reports - E-Parliament DMS{% endblock %}
 
 {% block extra_css %}
@@ -221,6 +222,10 @@
                                     <input class="form-check-input user-column-toggle" type="checkbox" id="userCol7" checked>
                                     <label class="form-check-label" for="userCol7">Role</label>
                                 </div>
+                                <div class="form-check">
+                                    <input class="form-check-input doc-column-toggle" type="checkbox" id="docCol8" checked>
+                                    <label class="form-check-label" for="docCol8">Shared With</label>
+                                </div>
                             </div>
                         </div>
                         
@@ -258,7 +263,7 @@
                             {% for user in all_users %}
                                 <tr>
                                     <td>{{ forloop.counter }}</td>
-                                    <td>{{ user.id }}</td>
+                                    <td>{{ user.username }}</td>
                                     <td>{{ user.get_full_name|default:user.username }}</td>
                                     <td>{{ user.profile.designation|default:"-" }}</td>
                                     <td>{{ user.profile.phone_number|default:"-" }}</td>
@@ -421,7 +426,8 @@
                                 <th data-column="category">Category</th>
                                 <th data-column="uploader">Uploaded By</th>
                                 <th data-column="date">Date</th>
-                                <th data-column="shared">Shared In</th>
+                                <th data-column="shared">Shared In(Team)</th>
+                                <th data-column="shared_with">Shared With</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -446,6 +452,19 @@
                                         {% empty %}
                                             -
                                         {% endfor %}
+                                    </td>
+                                    <td>
+                                        {% if document.visibility == 'PB' %}
+                                            <span class="badge bg-info text-dark">All Users</span>
+                                        {% else %}
+                                            {% with shared_users=document|get_shared_users %}
+                                                {% if shared_users %}
+                                                    {{ shared_users|join:", " }}
+                                                {% else %}
+                                                    <span class="text-muted">-</span>
+                                                {% endif %}
+                                            {% endwith %}
+                                        {% endif %}
                                     </td>
                                 </tr>
                             {% empty %}

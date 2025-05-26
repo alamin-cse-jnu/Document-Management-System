@@ -1,0 +1,59 @@
+<!-- templates/dms/folder_move.html -->
+{% extends 'base.html' %}
+{% block title %}Move Folder - E-Parliament DMS{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card border-0 shadow">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0"><i class="bi bi-folder-symlink me-2"></i>Move Folder</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Moving folder:</strong> {{ folder.get_full_path }}
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label for="id_new_parent_id" class="form-label">Select New Location</label>
+                            <select name="new_parent_id" id="id_new_parent_id" class="form-select">
+                                <option value="">{{ folder.category.name }} (Root Level)</option>
+                                {% for parent in possible_parents %}
+                                    <option value="{{ parent.id }}">{{ parent.get_full_path }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Choose where to move this folder. Leave blank to move to category root level.</div>
+                        </div>
+                        
+                        {% if not possible_parents %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            No other folders available as destinations. You can only move to the category root level.
+                        </div>
+                        {% endif %}
+                        
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Note:</strong> Moving this folder will also move all its subfolders and documents.
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'dms:folder_detail' folder.id %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-lg me-1"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-info">
+                                <i class="bi bi-folder-symlink me-1"></i> Move Folder
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

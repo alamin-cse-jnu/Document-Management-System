@@ -1,0 +1,263 @@
+<!-- templates/dms/folder_detail.html -->
+{% extends 'base.html' %}
+{% block title %}{{ folder.name }} - E-Parliament DMS{% endblock %}
+
+{% block extra_css %}
+<style>
+    .breadcrumb-nav {
+        background-color: #e9ecef;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .folder-item, .document-item {
+        padding: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        background-color: white;
+        transition: all 0.2s;
+    }
+    .folder-item:hover, .document-item:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    .folder-icon, .file-icon {
+        font-size: 2rem;
+        margin-right: 15px;
+    }
+    .folder-icon {
+        color: #ffc107;
+    }
+    .action-buttons {
+        margin-bottom: 20px;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 60px 0;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Breadcrumb Navigation -->
+    <div class="breadcrumb-nav">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item">
+                    <a href="{% url 'dms:folder_browser_category' folder.category.id %}">
+                        <i class="bi bi-house-door"></i> {{ folder.category.name }}
+                    </a>
+                </li>
+                {% for ancestor in breadcrumbs %}
+                    {% if forloop.last %}
+                        <li class="breadcrumb-item active" aria-current="page">
+                            <i class="bi bi-folder"></i> {{ ancestor.name }}
+                        </li>
+                    {% else %}
+                        <li class="breadcrumb-item">
+                            <a href="{% url 'dms:folder_detail' ancestor.id %}">
+                                <i class="bi bi-folder"></i> {{ ancestor.name }}
+                            </a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ol>
+        </nav>
+    </div>
+    
+    <!-- Header with Actions -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="bi bi-folder me-2"></i>{{ folder.name }}</h2>
+            {% if folder.description %}
+                <p class="text-muted">{{ folder.description }}</p>
+            {% endif %}
+            <small class="text-muted">
+                Created by {{ folder.owner.username }} on {{ folder.created_at|date:"M d, Y" }}
+            </small>
+        </div>
+        <div class="action-buttons">
+            {% if can_create_subfolder %}
+                <a href="{% url 'dms:folder_create_in_folder' folder.id %}" class="btn btn-success">
+                    <i class="bi bi-folder-plus me-1"></i> New Subfolder
+                </a>
+            {% endif %}
+            {% if can_upload %}
+                <a href="{% url 'dms:document_create' %}?folder={{ folder.id }}" class="btn btn-primary">
+                    <i class="bi bi-file-earmark-plus me-1"></i> Upload Document
+                </a>
+            {% endif %}
+            {% if can_edit %}
+                <a href="{% url 'dms:folder_update' folder.id %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-pencil me-1"></i> Edit
+                </a>
+            {% endif %}
+            {% if can_delete %}
+                <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteFolderModal">
+                    <i class="bi bi-trash me-1"></i> Delete
+                </button>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Subfolders Section -->
+        {% if subfolders %}
+        <div class="col-12 mb-4">
+            <h5><i class="bi bi-folder2 me-2"></i>Subfolders ({{ subfolders|length }})</h5>
+            <div class="row">
+                {% for subfolder in subfolders %}
+                <div class="col-lg-6 mb-3">
+                    <div class="folder-item">
+                        <div class="d-flex align-items-center">
+                            <div>
+                                <i class="bi bi-folder folder-icon"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">
+                                    <a href="{% url 'dms:folder_detail' subfolder.id %}" class="text-decoration-none">
+                                        {{ subfolder.name }}
+                                    </a>
+                                </h6>
+                                {% if subfolder.description %}
+                                    <p class="mb-1 text-muted small">{{ subfolder.description|truncatechars:50 }}</p>
+                                {% endif %}
+                                <small class="text-muted">
+                                    {{ subfolder.documents.count }} document{{ subfolder.documents.count|pluralize }}
+                                    • Created by {{ subfolder.owner.username }}
+                                </small>
+                            </div>
+                            <div class="ms-2">
+                                <a href="{% url 'dms:folder_detail' subfolder.id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-arrow-right"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Documents Section -->
+        {% if documents %}
+        <div class="col-12">
+            <h5><i class="bi bi-file-earmark me-2"></i>Documents ({{ documents.count }})</h5>
+            <div class="row">
+                {% for document in documents %}
+                <div class="col-lg-6 mb-3">
+                    <div class="document-item">
+                        <div class="d-flex align-items-center">
+                            <div>
+                                {% if document.file.name|lower|slice:"-4:" == ".pdf" %}
+                                    <i class="bi bi-file-earmark-pdf file-icon text-danger"></i>
+                                {% elif document.file.name|lower|slice:"-4:" == ".doc" or document.file.name|lower|slice:"-5:" == ".docx" %}
+                                    <i class="bi bi-file-earmark-word file-icon text-primary"></i>
+                                {% elif document.file.name|lower|slice:"-4:" == ".xls" or document.file.name|lower|slice:"-5:" == ".xlsx" %}
+                                    <i class="bi bi-file-earmark-excel file-icon text-success"></i>
+                                {% elif document.file.name|lower|slice:"-4:" == ".ppt" or document.file.name|lower|slice:"-5:" == ".pptx" %}
+                                    <i class="bi bi-file-earmark-ppt file-icon text-warning"></i>
+                                {% elif document.file.name|lower|slice:"-4:" == ".jpg" or document.file.name|lower|slice:"-4:" == ".png" or document.file.name|lower|slice:"-5:" == ".jpeg" %}
+                                    <i class="bi bi-file-earmark-image file-icon text-info"></i>
+                                {% else %}
+                                    <i class="bi bi-file-earmark file-icon"></i>
+                                {% endif %}
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">
+                                    <a href="{% url 'dms:document_detail' document.id %}" class="text-decoration-none">
+                                        {{ document.title }}
+                                    </a>
+                                </h6>
+                                {% if document.description %}
+                                    <p class="mb-1 text-muted small">{{ document.description|truncatechars:60 }}</p>
+                                {% endif %}
+                                <small class="text-muted">
+                                    v{{ document.version }} • {{ document.upload_date|date:"M d, Y" }}
+                                    • {{ document.owner.username }}
+                                </small>
+                                <div class="mt-1">
+                                    {% for category in document.categories.all %}
+                                        <span class="badge bg-light text-dark border me-1">{{ category.name }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="ms-2 d-flex flex-column gap-1">
+                                <a href="{% url 'dms:document_detail' document.id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{% url 'dms:document_download' document.id %}" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Empty State -->
+        {% if not subfolders and not documents %}
+        <div class="col-12">
+            <div class="empty-state">
+                <i class="bi bi-folder2-open display-1"></i>
+                <h4 class="mt-3">This folder is empty</h4>
+                <p>Create subfolders or upload documents to get started.</p>
+                <div class="mt-3">
+                    {% if can_create_subfolder %}
+                        <a href="{% url 'dms:folder_create_in_folder' folder.id %}" class="btn btn-success me-2">
+                            <i class="bi bi-folder-plus me-1"></i> Create Subfolder
+                        </a>
+                    {% endif %}
+                    {% if can_upload %}
+                        <a href="{% url 'dms:document_create' %}?folder={{ folder.id }}" class="btn btn-primary">
+                            <i class="bi bi-file-earmark-plus me-1"></i> Upload Document
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Delete Folder Modal -->
+{% if can_delete %}
+<div class="modal fade" id="deleteFolderModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Delete</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the folder <strong>{{ folder.name }}</strong>?</p>
+                {% if folder.subfolders.exists or folder.documents.exists %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        This folder contains subfolders or documents. You must move or delete all contents before deleting the folder.
+                    </div>
+                {% else %}
+                    <p class="text-danger small">This action cannot be undone.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{% url 'dms:folder_delete' folder.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger" {% if folder.subfolders.exists or folder.documents.exists %}disabled{% endif %}>
+                        Delete Folder
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
